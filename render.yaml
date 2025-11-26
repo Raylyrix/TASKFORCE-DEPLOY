@@ -71,5 +71,5 @@ databases:
   - name: taskforce-db
     databaseName: taskforce
     user: taskforce
-    plan: professional  # Updated from 'starter' - legacy plans no longer supported
+    plan: pro # Updated from 'starter' - legacy plans no longer supported
     postgresMajorVersion: 16
