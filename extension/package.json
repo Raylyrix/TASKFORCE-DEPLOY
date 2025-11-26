@@ -1,0 +1,40 @@
+{
+  "name": "extension",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsup --config tsup.config.ts && npm run copy-static",
+    "dev": "npm run copy-static && tsup --config tsup.config.ts --watch --onSuccess \"npm run copy-static\"",
+    "copy-static": "node scripts/copy-static.mjs",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
+    "format": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.7",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.27",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@typescript-eslint/parser": "^8.46.3",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "rimraf": "^6.1.0",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3"
+  }
+}

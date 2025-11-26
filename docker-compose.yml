@@ -1,0 +1,232 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Backend
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskforce-postgres
+    ports:
+      - "15001:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskforce
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskforce-network
+
+  # PostgreSQL Database for Sim-Main (with pgvector)
+  sim-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: sim-postgres
+    restart: always
+    ports:
+      - "15002:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: simstudio
+    volumes:
+      - sim-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskforce-network
+
+  # Redis for caching and queues
+  redis:
+    image: redis:7-alpine
+    container_name: taskforce-redis
+    ports:
+      - "15003:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskforce-network
+
+  # Backend Migrations
+  backend-migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.migrations
+    container_name: backend-migrations
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/taskforce
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npx prisma migrate deploy
+    restart: 'no'
+    networks:
+      - taskforce-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskforce-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/taskforce
+      REDIS_URL: redis://redis:6379
+      BACKEND_PUBLIC_URL: http://localhost:15004
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-1007595181381-t7kic92pdmi3cvgiomc8vobngh2t1goj.apps.googleusercontent.com}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-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}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:15004/api/auth/google/callback}
+      SESSION_SECRET: ${SESSION_SECRET:-development-session-secret-change-me-in-production-min-16-chars}
+    ports:
+      - "15004:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend-migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - taskforce-network
+
+  # Frontend Web App
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: taskforce-webapp
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:15004
+    ports:
+      - "15005:3001"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - taskforce-network
+
+  # Sim-Main Migrations
+  sim-migrations:
+    build:
+      context: ./sim-main
+      dockerfile: docker/db.Dockerfile
+    container_name: sim-migrations
+    working_dir: /app/packages/db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@sim-postgres:5432/simstudio
+    depends_on:
+      sim-postgres:
+        condition: service_healthy
+    command: ["bun", "run", "db:migrate"]
+    restart: 'no'
+    networks:
+      - taskforce-network
+
+  # Sim-Main Realtime Server
+  sim-realtime:
+    build:
+      context: ./sim-main
+      dockerfile: docker/realtime.Dockerfile
+    container_name: sim-realtime
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@sim-postgres:5432/simstudio
+      NEXT_PUBLIC_APP_URL: http://localhost:15007
+      BETTER_AUTH_URL: http://localhost:15007
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-your_auth_secret_here}
+    depends_on:
+      sim-postgres:
+        condition: service_healthy
+      sim-migrations:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    ports:
+      - "15006:3002"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '--quiet', 'http://127.0.0.1:3002/health']
+      interval: 90s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - taskforce-network
+
+  # Sim-Main Application
+  sim-main:
+    build:
+      context: ./sim-main
+      dockerfile: docker/app.Dockerfile
+      args:
+        DATABASE_URL: postgresql://postgres:postgres@sim-postgres:5432/simstudio
+        NEXT_PUBLIC_APP_URL: http://localhost:15007
+        BETTER_AUTH_URL: http://localhost:15007
+        BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev_auth_secret_32_chars_minimum_here}
+        ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev_encryption_key_32_chars_minimum_here}
+        INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev_internal_secret_32_chars_minimum}
+    container_name: sim-main
+    ports:
+      - '15007:3000'
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@sim-postgres:5432/simstudio
+      BETTER_AUTH_URL: http://localhost:15007
+      NEXT_PUBLIC_APP_URL: http://localhost:15007
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev_auth_secret_32_chars_minimum_here}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev_encryption_key_32_chars_minimum_here}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev_internal_secret_32_chars_minimum}
+      COPILOT_API_KEY: ${COPILOT_API_KEY:-}
+      SIM_AGENT_API_URL: ${SIM_AGENT_API_URL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://localhost:11434}
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:15006
+    depends_on:
+      sim-postgres:
+        condition: service_healthy
+      sim-migrations:
+        condition: service_completed_successfully
+      sim-realtime:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '--quiet', 'http://127.0.0.1:3000']
+      interval: 90s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - taskforce-network
+
+volumes:
+  postgres-data:
+    driver: local
+  sim-postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  taskforce-network:
+    driver: bridge

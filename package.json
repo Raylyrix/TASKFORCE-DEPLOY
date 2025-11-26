@@ -1,0 +1,16 @@
+{
+  "name": "taskforce-workspace",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "extension"
+  ],
+  "scripts": {
+    "dev": "npm run build --workspace extension && concurrently -k \"npm:dev:backend\" \"npm:dev:extension\"",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:extension": "npm run dev --workspace extension"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

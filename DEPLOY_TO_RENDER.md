@@ -1,0 +1,312 @@
+# 🚀 Complete Render Deployment Guide
+
+## All Environment Variables & Step-by-Step Instructions
+
+---
+
+## 📋 Part 1: Push Code to GitHub
+
+### Step 1.1: Update Git Remote
+
+Open PowerShell in your project directory and run:
+
+```powershell
+cd "C:\Users\hp\Downloads\TASKFORCE-PRODUCTION-main\TASKFORCE-PRODUCTION-main"
+git remote set-url origin https://github.com/Raylyrix/TASKFORCE-PRODUCTION.git
+```
+
+### Step 1.2: Stage and Commit
+
+```powershell
+git add .
+git commit -m "Production ready for Render deployment"
+```
+
+### Step 1.3: Push to GitHub
+
+```powershell
+git branch -M main
+git push -u origin main
+```
+
+**If you get authentication errors:**
+- Use a GitHub Personal Access Token (Settings → Developer settings → Personal access tokens)
+- Or use SSH: `git remote set-url origin git@github.com:Raylyrix/TASKFORCE-PRODUCTION.git`
+
+---
+
+## 📋 Part 2: Deploy to Render
+
+### Step 2.1: Create Render Account
+
+1. Go to https://render.com
+2. Sign up (use GitHub to connect)
+3. Verify email
+
+### Step 2.2: Deploy Using Blueprint (Recommended)
+
+1. **Render Dashboard** → **New** → **Blueprint**
+2. **Connect Repository:** Select `Raylyrix/TASKFORCE-PRODUCTION`
+3. Render will detect `render.yaml` automatically
+4. Click **Apply**
+5. Wait for services to be created (~2-3 minutes)
+
+### Step 2.3: Configure Environment Variables
+
+After Blueprint creates services, add these environment variables:
+
+#### Backend Service (`taskforce-backend`)
+
+Go to: **taskforce-backend** → **Environment** tab → **Add Environment Variable**
+
+**Required Variables:**
+
+| Key | Value |
+|-----|-------|
+| `NODE_ENV` | `production` |
+| `PORT` | `4000` |
+| `BACKEND_PUBLIC_URL` | `https://taskforce-backend.onrender.com` |
+| `GOOGLE_CLIENT_ID` | `1007595181381-t7kic92pdmi3cvgiomc8vobngh2t1goj.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | `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` |
+| `GOOGLE_REDIRECT_URI` | `https://taskforce-backend.onrender.com/api/auth/google/callback` |
+| `GOOGLE_EXTENSION_IDS` | `abbommimhkkkeiomeiegadjkdhhdieac` |
+
+**Auto-Set Variables (from Blueprint):**
+- `DATABASE_URL` - Auto-set from database
+- `REDIS_URL` - Auto-set from Redis
+- `SESSION_SECRET` - Auto-generated
+
+#### Frontend Service (`taskforce-webapp`)
+
+Go to: **taskforce-webapp** → **Environment** tab
+
+**Required Variables:**
+
+| Key | Value |
+|-----|-------|
+| `NODE_ENV` | `production` |
+| `NEXT_PUBLIC_API_URL` | `https://taskforce-backend.onrender.com` |
+
+**Note:** `NEXT_PUBLIC_API_URL` should auto-update from backend service, but verify it's correct.
+
+---
+
+## 📋 Part 3: Run Database Migrations
+
+### Step 3.1: Wait for Backend to Deploy
+
+1. Go to **taskforce-backend** service
+2. Wait for status to show **Live** (green)
+3. Check **Logs** tab to ensure no errors
+
+### Step 3.2: Run Migrations
+
+1. Go to **taskforce-backend** → **Shell** tab
+2. Run:
+   ```bash
+   cd backend
+   npx prisma migrate deploy
+   ```
+3. Wait for migrations to complete
+4. You should see: `All migrations have been successfully applied.`
+
+---
+
+## 📋 Part 4: Configure Google OAuth
+
+### Step 4.1: Update Redirect URIs
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. **APIs & Services** → **Credentials**
+3. Click on your OAuth 2.0 Client ID
+4. Under **Authorized Redirect URIs**, click **Add URI**
+5. Add these URIs:
+   - `https://taskforce-backend.onrender.com/api/auth/google/callback`
+   - `https://abbommimhkkkeiomeiegadjkdhhdieac.chromiumapp.org/oauth2`
+6. Click **Save**
+
+### Step 4.2: Verify APIs Enabled
+
+Make sure these APIs are enabled:
+- ✅ **Gmail API**
+- ✅ **Google Calendar API**
+- ✅ **Google OAuth2 API**
+
+---
+
+## 📋 Part 5: Verify Deployment
+
+### Step 5.1: Check Backend Health
+
+Open in browser or use curl:
+```
+https://taskforce-backend.onrender.com/health
+```
+
+Should return:
+```json
+{
+  "status": "ok",
+  "services": {
+    "database": "ok",
+    "redis": "ok"
+  },
+  "timestamp": "...",
+  "uptime": ...
+}
+```
+
+### Step 5.2: Check Frontend
+
+1. Open: `https://taskforce-webapp.onrender.com`
+2. Should load the login page
+
+### Step 5.3: Test Authentication
+
+1. Click **Sign in with Google**
+2. Complete OAuth flow
+3. Should redirect to dashboard
+
+---
+
+## 🔧 Complete Environment Variables Reference
+
+### Backend Service
+
+```env
+# Server
+NODE_ENV=production
+PORT=4000
+
+# Database (Auto-set by Render)
+DATABASE_URL=<Internal Database URL>
+
+# Redis (Auto-set by Render)
+REDIS_URL=<Internal Redis URL>
+
+# Public URLs
+BACKEND_PUBLIC_URL=https://taskforce-backend.onrender.com
+
+# Google OAuth
+GOOGLE_CLIENT_ID=1007595181381-t7kic92pdmi3cvgiomc8vobngh2t1goj.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=https://taskforce-backend.onrender.com/api/auth/google/callback
+GOOGLE_EXTENSION_IDS=abbommimhkkkeiomeiegadjkdhhdieac
+
+# Security (Auto-generated by Render)
+SESSION_SECRET=<Auto-generated>
+```
+
+### Frontend Service
+
+```env
+# Server
+NODE_ENV=production
+
+# API URL
+NEXT_PUBLIC_API_URL=https://taskforce-backend.onrender.com
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Issue: Backend Won't Start
+
+**Solution:**
+1. Check **Logs** tab for errors
+2. Verify all environment variables are set
+3. Ensure `DATABASE_URL` and `REDIS_URL` use internal URLs (not public)
+4. Check if migrations ran successfully
+
+### Issue: Frontend Can't Connect to Backend
+
+**Solution:**
+1. Verify `NEXT_PUBLIC_API_URL` matches backend URL exactly
+2. Check backend is running: `https://taskforce-backend.onrender.com/health`
+3. Restart frontend service
+
+### Issue: Database Connection Error
+
+**Solution:**
+1. Use internal database URL (Render provides this)
+2. Format: `postgresql://user:password@host:5432/database`
+3. Verify database service is running
+
+### Issue: Google OAuth Not Working
+
+**Solution:**
+1. Verify redirect URI in Google Console matches exactly
+2. Check `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct
+3. Ensure Gmail and Calendar APIs are enabled
+
+---
+
+## 📊 Service URLs
+
+After deployment:
+
+- **Backend API:** `https://taskforce-backend.onrender.com`
+- **Frontend App:** `https://taskforce-webapp.onrender.com`
+- **Health Check:** `https://taskforce-backend.onrender.com/health`
+
+---
+
+## ✅ Deployment Checklist
+
+- [ ] Code pushed to GitHub
+- [ ] Render account created
+- [ ] Blueprint deployed (or manual services created)
+- [ ] PostgreSQL database created
+- [ ] Redis created
+- [ ] Backend service deployed
+- [ ] All backend environment variables set
+- [ ] Database migrations run
+- [ ] Frontend service deployed
+- [ ] Frontend environment variables set
+- [ ] Google OAuth redirect URIs updated
+- [ ] Backend health check passing
+- [ ] Frontend loads correctly
+- [ ] Authentication tested
+- [ ] Core features tested
+
+---
+
+## 💰 Cost Estimate
+
+**Starter Plan (Recommended for Production):**
+- Backend: $7/month
+- Frontend: $7/month
+- PostgreSQL: $7/month
+- Redis: $7/month
+- **Total: ~$28/month**
+
+**Free Tier (Testing Only):**
+- Services spin down after 15 minutes of inactivity
+- Not recommended for production
+
+---
+
+## 🎉 You're Live!
+
+Your application is now deployed on Render.com!
+
+**Next Steps:**
+1. Test all features (email, campaigns, calendar, bookings)
+2. Set up custom domains (optional)
+3. Configure monitoring alerts
+4. Set up database backups
+
+---
+
+## 📞 Support Resources
+
+- **Render Docs:** https://render.com/docs
+- **Render Status:** https://status.render.com
+- **Application Logs:** Render Dashboard → Service → Logs
+- **Health Checks:** `/health`, `/ready`, `/live`
+
+---
+
+**Ready? Follow the steps above to deploy!** 🚀
+

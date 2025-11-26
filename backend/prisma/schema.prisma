@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  displayName         String?
+  pictureUrl          String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  oauthCredential     OAuthCredential?
+  campaigns           Campaign[]
+  sheetSources        SheetSource[]
+  calendarConnections CalendarConnection[]
+  meetingTypes        MeetingType[]
+  meetingBookings     MeetingBooking[]
+  meetingReminders    MeetingReminder[]
+  emailDrafts         EmailDraft[]
+  scheduledEmails     ScheduledEmail[]
+  emailTemplates      EmailTemplate[]
+  emailSnoozes        EmailSnooze[]
+  emailFilters        EmailFilter[]
+  teamMemberships     TeamMember[]
+  emailAssignments    EmailAssignment[]
+  assignmentsCreated  EmailAssignment[]    @relation("AssignmentCreator")
+  ownedTeams          Team[]               @relation("TeamOwner")
+  workflows           Workflow[]
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model OAuthCredential {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  accessToken  String
+  refreshToken String
+  scope        String
+  tokenType    String
+  expiryDate   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SheetSource {
+  id            String   @id @default(cuid())
+  userId        String
+  title         String
+  spreadsheetId String
+  worksheetId   String?
+  columns       Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+model CalendarConnection {
+  id                String           @id @default(cuid())
+  userId            String
+  provider          CalendarProvider
+  accountEmail      String
+  externalAccountId String
+  defaultCalendarId String?
+  timeZone          String?
+  accessToken       String
+  refreshToken      String
+  scope             String
+  tokenType         String
+  expiryDate        DateTime
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user               User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availabilityCaches CalendarAvailabilityCache[]
+  meetingTypes       MeetingType[]
+
+  @@unique([userId, externalAccountId])
+  @@index([userId])
+  @@index([userId, provider])
+  @@index([expiryDate])
+}
+
+model CalendarAvailabilityCache {
+  id                   String   @id @default(cuid())
+  calendarConnectionId String
+  rangeStart           DateTime
+  rangeEnd             DateTime
+  busyBlocks           Json
+  refreshedAt          DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  calendarConnection CalendarConnection @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarConnectionId, rangeStart, rangeEnd], map: "calendar_availability_unique_range")
+}
+
+model MeetingType {
+  id                   String              @id @default(cuid())
+  userId               String
+  calendarConnectionId String?
+  name                 String
+  slug                 String              @unique
+  description          String?
+  durationMinutes      Int
+  bufferBeforeMinutes  Int                 @default(0)
+  bufferAfterMinutes   Int                 @default(0)
+  maxBookingsPerDay    Int?
+  availabilityRules    Json
+  formSchema           Json?
+  meetingLocationType  MeetingLocationType
+  meetingLocationValue String?
+  isActive             Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendarConnection CalendarConnection? @relation(fields: [calendarConnectionId], references: [id])
+  bookingLinks       BookingLink[]
+  bookings           MeetingBooking[]
+  reminders          MeetingReminder[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([slug])
+  @@index([calendarConnectionId])
+}
+
+model BookingLink {
+  id            String   @id @default(cuid())
+  meetingTypeId String
+  name          String?
+  token         String   @unique
+  description   String?
+  isPublic      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  meetingType MeetingType       @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+  bookings    MeetingBooking[]
+  reminders   MeetingReminder[]
+}
+
+model MeetingBooking {
+  id              String               @id @default(cuid())
+  meetingTypeId   String
+  bookingLinkId   String?
+  userId          String
+  calendarEventId String?
+  conferenceUrl   String?
+  startTime       DateTime
+  endTime         DateTime
+  status          MeetingBookingStatus @default(PENDING)
+  inviteeEmail    String
+  inviteeName     String?
+  inviteeAnswers  Json?
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  meetingType MeetingType  @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+  bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([meetingTypeId])
+  @@index([bookingLinkId])
+  @@index([status])
+  @@index([startTime])
+  @@index([userId, startTime])
+  @@index([inviteeEmail])
+}
+
+model Campaign {
+  id              String         @id @default(cuid())
+  userId          String
+  sheetSourceId   String?
+  name            String
+  status          CampaignStatus @default(DRAFT)
+  sendStrategy    Json
+  trackingConfig  Json
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  scheduledSendAt DateTime?
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sheetSource SheetSource?        @relation(fields: [sheetSourceId], references: [id])
+  recipients  CampaignRecipient[]
+  followUps   FollowUpSequence[]
+  messages    MessageLog[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([status])
+  @@index([scheduledSendAt])
+  @@index([userId, createdAt])
+}
+
+model CampaignRecipient {
+  id         String          @id @default(cuid())
+  campaignId String
+  email      String
+  payload    Json
+  status     RecipientStatus @default(PENDING)
+  lastSentAt DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  campaign Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  messages MessageLog[]
+
+  @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([email])
+  @@index([status])
+}
+
+model FollowUpSequence {
+  id         String   @id @default(cuid())
+  campaignId String
+  name       String
+  settings   Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  steps    FollowUpStep[]
+}
+
+model FollowUpStep {
+  id                 String   @id @default(cuid())
+  followUpSequenceId String
+  order              Int
+  offsetConfig       Json
+  templateSubject    String   @default("")
+  templateHtml       String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sequence    FollowUpSequence @relation(fields: [followUpSequenceId], references: [id], onDelete: Cascade)
+  messageLogs MessageLog[]
+}
+
+model MessageLog {
+  id                  String        @id @default(cuid())
+  campaignId          String
+  campaignRecipientId String?
+  followUpStepId      String?
+  gmailMessageId      String?
+  subject             String
+  to                  String
+  status              MessageStatus @default(PENDING)
+  sendAt              DateTime?
+  error               String?
+  opens               Int           @default(0)
+  clicks              Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  campaign       Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient      CampaignRecipient? @relation(fields: [campaignRecipientId], references: [id])
+  followUpStep   FollowUpStep?      @relation(fields: [followUpStepId], references: [id])
+  trackingEvents TrackingEvent[]
+
+  @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([status])
+  @@index([sendAt])
+  @@index([to])
+  @@index([gmailMessageId])
+}
+
+model TrackingEvent {
+  id           String            @id @default(cuid())
+  messageLogId String
+  type         TrackingEventType
+  meta         Json?
+  createdAt    DateTime          @default(now())
+
+  message MessageLog @relation(fields: [messageLogId], references: [id], onDelete: Cascade)
+}
+
+model MeetingReminder {
+  id                  String                @id @default(cuid())
+  userId              String
+  meetingTypeId       String
+  bookingLinkId       String?
+  inviteeEmail        String
+  inviteeName         String?
+  status              MeetingReminderStatus @default(SCHEDULED)
+  sendCount           Int                   @default(0)
+  maxSends            Int                   @default(2)
+  schedulePlanMinutes Int[]                 @default([])
+  lastSentAt          DateTime?
+  nextSendAt          DateTime?
+  metadata            Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meetingType MeetingType  @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+  bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id], onDelete: SetNull)
+
+  @@unique([meetingTypeId, inviteeEmail])
+  @@index([status, nextSendAt])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  SUPPRESSED
+}
+
+enum MessageStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+}
+
+enum TrackingEventType {
+  OPEN
+  CLICK
+  REPLY
+  BOUNCE
+  UNSUBSCRIBE
+}
+
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+  OTHER
+}
+
+enum MeetingLocationType {
+  GOOGLE_MEET
+  PHONE
+  IN_PERSON
+  CUSTOM_URL
+}
+
+enum MeetingBookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  DECLINED
+}
+
+enum MeetingReminderStatus {
+  PENDING
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model EmailDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  to          String
+  cc          String?
+  bcc         String?
+  subject     String
+  body        String
+  html        String?
+  attachments Json?
+  threadId    String?
+  replyToId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+}
+
+model ScheduledEmail {
+  id          String               @id @default(cuid())
+  userId      String
+  to          String
+  cc          String?
+  bcc         String?
+  subject     String
+  body        String
+  html        String?
+  scheduledAt DateTime
+  timezone    String?
+  status      ScheduledEmailStatus @default(PENDING)
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scheduledAt, status])
+}
+
+model EmailTemplate {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  category   String?
+  subject    String
+  body       String
+  html       String?
+  variables  Json?
+  isPublic   Boolean  @default(false)
+  usageCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
+model EmailSnooze {
+  id          String   @id @default(cuid())
+  userId      String
+  messageId   String
+  threadId    String?
+  snoozeUntil DateTime
+  labelIds    String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId, snoozeUntil])
+}
+
+model EmailFilter {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  criteria    Json
+  actions     Json
+  isActive    Boolean   @default(true)
+  matchCount  Int       @default(0)
+  lastMatched DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+}
+
+enum ScheduledEmailStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner            User              @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members          TeamMember[]
+  sharedInboxes    SharedInbox[]
+  emailAssignments EmailAssignment[]
+
+  @@index([ownerId])
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
+}
+
+model SharedInbox {
+  id           String   @id @default(cuid())
+  teamId       String
+  name         String
+  description  String?
+  emailAddress String? // Optional: specific email address for this inbox
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team             Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  emailAssignments EmailAssignment[]
+
+  @@index([teamId, isActive])
+}
+
+enum AssignmentStatus {
+  UNASSIGNED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model EmailAssignment {
+  id            String           @id @default(cuid())
+  teamId        String
+  sharedInboxId String?
+  messageId     String
+  threadId      String?
+  assignedToId  String?
+  assignedById  String?
+  status        AssignmentStatus @default(UNASSIGNED)
+  priority      Int              @default(0) // 0 = normal, 1 = high, 2 = urgent
+  notes         String?
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  assignedAt    DateTime?
+  resolvedAt    DateTime?
+
+  team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sharedInbox SharedInbox? @relation(fields: [sharedInboxId], references: [id], onDelete: SetNull)
+  assignedTo  User?        @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedBy  User?        @relation("AssignmentCreator", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, messageId])
+  @@index([teamId, status])
+  @@index([assignedToId, status])
+  @@index([sharedInboxId])
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  trigger     Json           // Trigger configuration
+  nodes       Json           // Workflow nodes (visual representation)
+  edges       Json           // Workflow edges (connections)
+  isActive    Boolean        @default(true)
+  runCount    Int            @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions   WorkflowExecution[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([isActive])
+}
+
+model WorkflowExecution {
+  id         String              @id @default(cuid())
+  workflowId String
+  status     WorkflowExecutionStatus @default(RUNNING)
+  context    Json                // Execution context (data passed through workflow)
+  currentNodeId String?         // Current node being executed
+  error      String?
+  startedAt  DateTime            @default(now())
+  completedAt DateTime?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+enum WorkflowExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

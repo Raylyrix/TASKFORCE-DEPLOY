@@ -1,0 +1,35 @@
+import { Router } from "express";
+
+import { authRouter } from "./modules/auth";
+import { campaignsRouter } from "./modules/campaigns";
+import { followUpsRouter } from "./modules/followUps";
+import { calendarRouter } from "./modules/calendar";
+import { gmailRouter } from "./modules/gmail";
+import { healthRouter } from "./modules/health";
+import { sheetsRouter } from "./modules/sheets";
+import { trackingRouter } from "./modules/tracking";
+import { bookingRouter } from "./modules/booking";
+import { bookingsRouter } from "./modules/bookings";
+import { emailFeaturesRouter } from "./modules/emailFeatures";
+import { teamsRouter } from "./modules/teams";
+import { emailAssignmentsRouter } from "./modules/emailAssignments";
+import { customerViewRouter } from "./modules/customerView";
+import { workflowsRouter } from "./modules/workflows";
+
+export const router = Router();
+
+router.use("/health", healthRouter);
+router.use("/auth", authRouter);
+router.use("/sheets", sheetsRouter);
+router.use("/campaigns", campaignsRouter);
+router.use("/follow-ups", followUpsRouter);
+router.use("/calendar", calendarRouter);
+router.use("/gmail", gmailRouter);
+router.use("/tracking", trackingRouter);
+router.use("/", bookingRouter);
+router.use("/bookings", bookingsRouter);
+router.use("/email-features", emailFeaturesRouter);
+router.use("/teams", teamsRouter);
+router.use("/email-assignments", emailAssignmentsRouter);
+router.use("/customer-view", customerViewRouter);
+router.use("/workflows", workflowsRouter);

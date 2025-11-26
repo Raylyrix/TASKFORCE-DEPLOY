@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "TaskForce Campaign Manager",
+  "description": "Injects a custom Gmail composer to orchestrate bulk outreach campaigns with scheduling, follow-ups, and tracking.",
+  "version": "0.1.0",
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "TaskForce"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content/index.js"],
+      "type": "module",
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage", "identity"],
+  "host_permissions": ["https://mail.google.com/*", "http://localhost:3000/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/index.js"],
+      "matches": ["https://mail.google.com/*"]
+    }
+  ]
+}

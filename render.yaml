@@ -1,0 +1,69 @@
+services:
+  # Backend API Service
+  - type: web
+    name: taskforce-backend
+    env: node
+    plan: starter
+    buildCommand: cd backend && npm ci && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taskforce-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: taskforce-redis
+          type: redis
+          property: connectionString
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_EXTENSION_IDS
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # Frontend Web App
+  - type: web
+    name: taskforce-webapp
+    env: node
+    plan: starter
+    buildCommand: cd webapp && npm ci && npm run build
+    startCommand: cd webapp && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: taskforce-backend
+          type: web
+          property: host
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+databases:
+  # PostgreSQL Database
+  - name: taskforce-db
+    databaseName: taskforce
+    user: taskforce
+    plan: starter
+    postgresMajorVersion: 16
+
+  # Redis Cache
+  - name: taskforce-redis
+    type: redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
