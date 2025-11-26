@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 4000
+        value: "4000"
       - key: DATABASE_URL
         fromDatabase:
           name: taskforce-db
@@ -46,10 +46,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          name: taskforce-backend
-          type: web
-          property: host
+        sync: false
     healthCheckPath: /api/health
     autoDeploy: true
 
@@ -66,4 +63,3 @@ databases:
     type: redis
     plan: starter
     maxmemoryPolicy: allkeys-lru
-
