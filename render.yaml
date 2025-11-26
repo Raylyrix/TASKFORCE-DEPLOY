@@ -58,8 +58,9 @@ databases:
     plan: starter
     postgresMajorVersion: 16
 
+services:
   # Redis Cache
-  - name: taskforce-redis
-    type: redis
+  - type: redis
+    name: taskforce-redis
     plan: starter
     maxmemoryPolicy: allkeys-lru
