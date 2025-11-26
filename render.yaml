@@ -68,8 +68,10 @@ services:
 
 databases:
   # PostgreSQL Database
+  # IMPORTANT: Create the database manually in Render Dashboard first with your desired plan
+  # Then reference it here. The 'plan' field is not supported for new databases in render.yaml
+  # Legacy plan names (starter, professional, pro) are no longer supported in YAML
   - name: taskforce-db
     databaseName: taskforce
     user: taskforce
-    plan: pro # Updated from 'starter' - legacy plans no longer supported
     postgresMajorVersion: 16
