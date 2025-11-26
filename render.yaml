@@ -1,9 +1,10 @@
 services:
   # Backend API Service
+  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
   - type: web
     name: taskforce-backend
     env: node
-    plan: starter
+    plan: free  # Options: 'free' (limited), 'starter' ($7/mo), 'standard' ($25/mo)
     buildCommand: cd backend && npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
     startCommand: cd backend && npm start
     envVars:
@@ -37,10 +38,11 @@ services:
     autoDeploy: true
 
   # Frontend Web App
+  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
   - type: web
     name: taskforce-webapp
     env: node
-    plan: starter
+    plan: free  # Options: 'free' (limited), 'starter' ($7/mo), 'standard' ($25/mo)
     buildCommand: cd webapp && npm ci && npm run build
     startCommand: cd webapp && npm start
     envVars:
@@ -60,9 +62,10 @@ services:
     autoDeploy: true
 
   # Redis Cache
+  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
   - type: redis
     name: taskforce-redis
-    plan: starter
+    plan: free  # Options: 'free' (limited), 'starter' ($7/mo)
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
