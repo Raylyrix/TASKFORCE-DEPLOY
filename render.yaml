@@ -55,6 +55,7 @@ services:
     name: taskforce-redis
     plan: starter
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 databases:
   # PostgreSQL Database
