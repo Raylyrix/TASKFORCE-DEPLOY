@@ -50,6 +50,12 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
 
+  # Redis Cache
+  - type: redis
+    name: taskforce-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
 databases:
   # PostgreSQL Database
   - name: taskforce-db
@@ -57,10 +63,3 @@ databases:
     user: taskforce
     plan: starter
     postgresMajorVersion: 16
-
-services:
-  # Redis Cache
-  - type: redis
-    name: taskforce-redis
-    plan: starter
-    maxmemoryPolicy: allkeys-lru
