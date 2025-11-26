@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-const STATE_TTL_MS = 5 * 60 * 1000;
+import { getRedis } from "../lib/redis";
+import { logger } from "../lib/logger";
+
+const STATE_TTL_SECONDS = 15 * 60; // 15 minutes (increased from 5 minutes)
+const STATE_TTL_MS = STATE_TTL_SECONDS * 1000;
 
 type OAuthStatePayload = {
   redirectUri?: string;
@@ -11,39 +15,55 @@ type OAuthStateEntry = OAuthStatePayload & {
   expiresAt: number;
 };
 
-const stateStore = new Map<string, OAuthStateEntry>();
-
-const purgeExpiredStates = () => {
-  const now = Date.now();
-  for (const [key, entry] of stateStore.entries()) {
-    if (entry.expiresAt <= now) {
-      stateStore.delete(key);
-    }
-  }
-};
-
 export const oauthStateStore = {
-  create(payload: OAuthStatePayload = {}) {
-    purgeExpiredStates();
+  async create(payload: OAuthStatePayload = {}): Promise<{ state: string; expiresAt: number }> {
     const state = randomUUID();
     const createdAt = Date.now();
+    const expiresAt = createdAt + STATE_TTL_MS;
+    
     const entry: OAuthStateEntry = {
       ...payload,
       createdAt,
-      expiresAt: createdAt + STATE_TTL_MS,
+      expiresAt,
     };
-    stateStore.set(state, entry);
-    return { state, expiresAt: entry.expiresAt };
+
+    try {
+      const redis = getRedis();
+      const key = `oauth_state:${state}`;
+      // Store in Redis with expiration
+      await redis.setex(key, STATE_TTL_SECONDS, JSON.stringify(entry));
+      logger.debug({ state, expiresAt }, "OAuth state created");
+      return { state, expiresAt };
+    } catch (error) {
+      logger.error({ error, state }, "Failed to store OAuth state in Redis");
+      // Fallback: throw error instead of silently failing
+      throw new Error("Failed to create OAuth state. Please try again.");
+    }
   },
-  consume(state: string) {
-    purgeExpiredStates();
-    const entry = stateStore.get(state);
-    if (!entry) {
+  
+  async consume(state: string): Promise<OAuthStateEntry | null> {
+    try {
+      const redis = getRedis();
+      const key = `oauth_state:${state}`;
+      const stored = await redis.get(key);
+      
+      if (!stored) {
+        logger.warn({ state }, "OAuth state not found or expired");
+        return null;
+      }
+
+      // Delete the state after consuming (one-time use)
+      await redis.del(key);
+      
+      const entry = JSON.parse(stored) as OAuthStateEntry;
+      logger.debug({ state }, "OAuth state consumed");
+      return entry;
+    } catch (error) {
+      logger.error({ error, state }, "Failed to consume OAuth state from Redis");
       return null;
     }
-    stateStore.delete(state);
-    return entry;
   },
+  
   ttlMs: STATE_TTL_MS,
 };
 

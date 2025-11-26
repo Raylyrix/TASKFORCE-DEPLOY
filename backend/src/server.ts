@@ -13,6 +13,23 @@ initializeQueryLogger();
 // Initialize background job queues
 initializeQueues();
 
+// Clear old rate limit keys on startup (optional, helps with stale keys)
+if (process.env.CLEAR_RATE_LIMITS_ON_STARTUP === "true") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getRedis } = require("./lib/redis");
+  const redis = getRedis();
+  redis.keys("rate_limit:*").then((keys: string[]) => {
+    if (keys.length > 0) {
+      logger.info({ count: keys.length }, "Clearing old rate limit keys on startup");
+      redis.del(...keys).catch((error: unknown) => {
+        logger.warn({ error }, "Failed to clear old rate limit keys");
+      });
+    }
+  }).catch((error: unknown) => {
+    logger.warn({ error }, "Failed to check for old rate limit keys");
+  });
+}
+
 // Schedule periodic calendar syncs every 15 minutes
 setInterval(async () => {
   try {

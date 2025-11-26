@@ -56,10 +56,20 @@ export default function NewCampaignPage() {
   const [showPreview, setShowPreview] = useState(true);
   const [selectedMeetingType, setSelectedMeetingType] = useState<string | null>(null);
   const [meetingLink, setMeetingLink] = useState<string | null>(null);
+  const [labelConfig, setLabelConfig] = useState({
+    autoCreate: false,
+    labelName: "",
+    labelIds: [] as string[],
+  });
 
   const { data: meetingTypes } = useQuery({
     queryKey: ["meeting-types"],
     queryFn: () => api.calendar.getMeetingTypes(),
+  });
+
+  const { data: labelsData } = useQuery({
+    queryKey: ["gmail-labels"],
+    queryFn: () => api.gmail.getLabels(),
   });
 
   const importMutation = useMutation({
@@ -91,6 +101,25 @@ export default function NewCampaignPage() {
         payload: row,
       }));
 
+      // Handle label creation if auto-create is enabled
+      let finalLabelConfig = labelConfig;
+      if (labelConfig.autoCreate && labelConfig.labelName) {
+        try {
+          const labelResult = await api.gmail.createLabel({
+            name: labelConfig.labelName,
+            messageListVisibility: "show",
+            labelListVisibility: "labelShow",
+          });
+          finalLabelConfig = {
+            ...labelConfig,
+            labelIds: [labelResult.label.id],
+          };
+        } catch (error) {
+          console.error("Failed to create label:", error);
+          // Continue without label if creation fails
+        }
+      }
+
       return api.campaigns.create({
         name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
         recipients: {
@@ -107,6 +136,7 @@ export default function NewCampaignPage() {
             html: bodyTemplate,
           },
         },
+        labelConfig: (finalLabelConfig.autoCreate || finalLabelConfig.labelIds.length > 0) ? finalLabelConfig : undefined,
       });
     },
     onSuccess: async (data) => {
@@ -474,6 +504,92 @@ export default function NewCampaignPage() {
                       />
                       <span className="text-sm text-gray-700">Track link clicks</span>
                     </label>
+                  </div>
+
+                  {/* Label Management */}
+                  <div className="border-t border-gray-200 pt-6 mt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Email Organization</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Automatically organize campaign emails with Gmail labels/folders
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={labelConfig.autoCreate}
+                          onChange={(e) => setLabelConfig({ ...labelConfig, autoCreate: e.target.checked })}
+                          className="w-4 h-4 text-primary-600 rounded"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Auto-create and apply label</span>
+                      </label>
+
+                      {labelConfig.autoCreate && (
+                        <div className="ml-7 space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Label Name
+                            </label>
+                            <input
+                              type="text"
+                              value={labelConfig.labelName}
+                              onChange={(e) => setLabelConfig({ ...labelConfig, labelName: e.target.value })}
+                              placeholder="e.g., Campaign: Product Launch"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              A new Gmail label will be created and applied to all campaign emails
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="border-t border-gray-200 pt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Or select existing labels
+                        </label>
+                        {labelsData?.labels && labelsData.labels.length > 0 ? (
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {labelsData.labels
+                              .filter((label) => label.type === "user")
+                              .map((label) => (
+                                <label
+                                  key={label.id}
+                                  className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={labelConfig.labelIds.includes(label.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setLabelConfig({
+                                          ...labelConfig,
+                                          labelIds: [...labelConfig.labelIds, label.id],
+                                        });
+                                      } else {
+                                        setLabelConfig({
+                                          ...labelConfig,
+                                          labelIds: labelConfig.labelIds.filter((id) => id !== label.id),
+                                        });
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-primary-600 rounded"
+                                  />
+                                  <span className="text-sm text-gray-700">{label.name}</span>
+                                  {label.color && (
+                                    <span
+                                      className="w-4 h-4 rounded-full"
+                                      style={{ backgroundColor: label.color }}
+                                    />
+                                  )}
+                                </label>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">No labels available</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

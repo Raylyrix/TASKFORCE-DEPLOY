@@ -31,6 +31,13 @@ const createCampaignSchema = z.object({
       }),
     })
     .optional(),
+  labelConfig: z
+    .object({
+      autoCreate: z.boolean().optional().default(false),
+      labelName: z.string().optional(),
+      labelIds: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 campaignsRouter.post("/", requireUser, async (req, res, next) => {
@@ -75,12 +82,18 @@ campaignsRouter.post("/", requireUser, async (req, res, next) => {
       return;
     }
 
+    // Merge labelConfig into strategy if provided
+    const strategyWithLabels = payload.labelConfig
+      ? { ...strategy, labelConfig: payload.labelConfig }
+      : strategy;
+
     const campaign = await campaignEngine.createCampaign({
       userId: req.currentUser.id,
       name: payload.name,
       sheetSourceId: payload.sheetSourceId,
       recipients,
-      strategy,
+      strategy: strategyWithLabels,
+      labelConfig: payload.labelConfig,
     });
 
     res.status(201).json({
@@ -217,7 +230,19 @@ campaignsRouter.get("/:campaignId", requireUser, async (req, res, next) => {
     const { campaignId } = req.params;
     const summary = await campaignEngine.getCampaignSummary(campaignId);
 
-    res.status(200).json(summary);
+    // Return in format expected by frontend
+    res.status(200).json({
+      id: summary.campaign.id,
+      name: summary.campaign.name,
+      status: summary.campaign.status,
+      summary: {
+        total: summary.metrics.totalRecipients,
+        sent: summary.metrics.sentCount,
+        opened: summary.metrics.opens,
+        clicked: summary.metrics.clicks,
+        failed: summary.metrics.failedCount,
+      },
+    });
   } catch (error) {
     next(error);
   }

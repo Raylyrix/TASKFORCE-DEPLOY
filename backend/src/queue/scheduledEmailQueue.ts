@@ -3,6 +3,7 @@ import type { Job } from "bullmq";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { googleAuthService } from "../services/googleAuth";
+import { gmailDeliveryService } from "../services/gmailDelivery";
 import { QueueName, type ScheduledEmailJob } from "./types";
 import { createQueue, registerWorker } from "./queueFactory";
 import { google } from "googleapis";
@@ -41,44 +42,60 @@ export const registerScheduledEmailWorker = () =>
         throw new Error(`Scheduled email not ready yet. Rescheduling in ${delay}ms`);
       }
 
-      // Get Gmail client
-      const client = await googleAuthService.getAuthorizedClientForUser(userId);
-      const gmail = google.gmail({ version: "v1", auth: client });
+      // Check if we should send as reply
+      const metadata = scheduledEmail.metadata as {
+        sendAsReply?: boolean;
+        replyToMessageId?: string;
+        replyToThreadId?: string;
+      } | null;
 
-      // Build email
-      const emailHeaders = [
-        `To: ${scheduledEmail.to}`,
-        `Subject: ${scheduledEmail.subject}`,
-      ];
+      const sendAsReply = metadata?.sendAsReply ?? false;
+      let threadId: string | null = null;
+      let replyHeaders: Record<string, string> = {};
 
-      if (scheduledEmail.cc) {
-        emailHeaders.push(`Cc: ${scheduledEmail.cc}`);
+      if (sendAsReply) {
+        // Get thread ID from replyToMessageId or use replyToThreadId
+        if (metadata?.replyToThreadId) {
+          threadId = metadata.replyToThreadId;
+        } else if (metadata?.replyToMessageId) {
+          try {
+            const client = await googleAuthService.getAuthorizedClientForUser(userId);
+            const gmail = google.gmail({ version: "v1", auth: client });
+            const message = await gmail.users.messages.get({
+              userId: "me",
+              id: metadata.replyToMessageId,
+              format: "metadata",
+              metadataHeaders: ["Message-ID", "In-Reply-To", "References"],
+            });
+            threadId = message.data.threadId || null;
+            
+            // Set reply headers
+            if (threadId) {
+              replyHeaders = {
+                "In-Reply-To": metadata.replyToMessageId,
+                "References": metadata.replyToMessageId,
+              };
+              // Modify subject to add "Re: " prefix if not already present
+              if (!scheduledEmail.subject.startsWith("Re:") && !scheduledEmail.subject.startsWith("RE:")) {
+                scheduledEmail.subject = `Re: ${scheduledEmail.subject}`;
+              }
+            }
+          } catch (error) {
+            logger.error({ error, replyToMessageId: metadata.replyToMessageId }, "Failed to get thread ID for reply");
+          }
+        }
       }
 
-      if (scheduledEmail.bcc) {
-        emailHeaders.push(`Bcc: ${scheduledEmail.bcc}`);
-      }
-
-      emailHeaders.push("Content-Type: text/html; charset=utf-8");
-      emailHeaders.push("");
-
-      const emailBody = [
-        ...emailHeaders,
-        scheduledEmail.html || scheduledEmail.body.replace(/\n/g, "<br>"),
-      ].join("\n");
-
-      const encodedMessage = Buffer.from(emailBody)
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
-
-      // Send email
-      const result = await gmail.users.messages.send({
-        userId: "me",
-        requestBody: {
-          raw: encodedMessage,
-        },
+      // Use gmailDeliveryService for consistent email sending
+      const result = await gmailDeliveryService.sendEmailViaGmail({
+        userId,
+        to: scheduledEmail.to,
+        subject: scheduledEmail.subject,
+        bodyHtml: scheduledEmail.html || scheduledEmail.body.replace(/\n/g, "<br>"),
+        cc: scheduledEmail.cc ? [scheduledEmail.cc] : undefined,
+        bcc: scheduledEmail.bcc ? [scheduledEmail.bcc] : undefined,
+        threadId: threadId,
+        headers: Object.keys(replyHeaders).length > 0 ? replyHeaders : undefined,
       });
 
       // Update status
@@ -96,7 +113,7 @@ export const registerScheduledEmailWorker = () =>
       }
 
       logger.info(
-        { scheduledEmailId, messageId: result.data.id },
+        { scheduledEmailId, messageId: result.id },
         "Scheduled email sent successfully",
       );
     } catch (error) {

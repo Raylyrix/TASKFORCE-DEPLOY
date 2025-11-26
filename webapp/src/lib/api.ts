@@ -125,6 +125,11 @@ export const api = {
         trackClicks?: boolean;
         template: { subject: string; html: string };
       };
+      labelConfig?: {
+        autoCreate?: boolean;
+        labelName?: string;
+        labelIds?: string[];
+      };
     }) => apiRequest<{ id: string }>("/api/campaigns", { method: "POST", body: data }),
     schedule: (id: string, startAt?: string) =>
       apiRequest<{ campaignId: string; status: string; startAt: string }>(`/api/campaigns/${id}/schedule`, {
@@ -398,6 +403,27 @@ export const api = {
           color: string | null;
         }>;
       }>("/api/gmail/labels"),
+    createLabel: (data: {
+      name: string;
+      messageListVisibility?: "show" | "hide";
+      labelListVisibility?: "labelShow" | "labelHide";
+      color?: {
+        backgroundColor?: string;
+        textColor?: string;
+      };
+    }) =>
+      apiRequest<{
+        label: {
+          id: string;
+          name: string;
+          type: "system" | "user";
+          color: string | null;
+        };
+        created: boolean;
+      }>("/api/gmail/labels", {
+        method: "POST",
+        body: data,
+      }),
     getThread: (threadId: string) =>
       apiRequest<{
         threadId: string;
@@ -510,6 +536,9 @@ export const api = {
       html?: string;
       scheduledAt: string;
       timezone?: string;
+      sendAsReply?: boolean;
+      replyToMessageId?: string;
+      replyToThreadId?: string;
     }) =>
       apiRequest<{
         id: string;
@@ -869,9 +898,13 @@ export const api = {
     create: (campaignId: string, data: {
       name: string;
       steps: Array<{
-        delayMs: number;
+        delayMs?: number;
+        scheduledAt?: string;
         subject: string;
         html: string;
+        sendAsReply?: boolean;
+        replyToMessageId?: string;
+        replyToThreadId?: string;
       }>;
     }) =>
       apiRequest<{
@@ -1293,6 +1326,15 @@ export const api = {
   },
   // Tracking Analytics
   tracking: {
+    getDailyAnalytics: (days?: number) =>
+      apiRequest<{
+        dailyData: Array<{
+          date: string;
+          dateKey: string;
+          opens: number;
+          clicks: number;
+        }>;
+      }>(`/api/tracking/daily-analytics${days ? `?days=${days}` : ""}`),
     getAnalytics: (options?: { campaignId?: string; messageLogId?: string }) => {
       const params = new URLSearchParams();
       if (options?.campaignId) params.append("campaignId", options.campaignId);

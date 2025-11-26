@@ -991,7 +991,7 @@ export default function EmailsPage() {
             }
             setCurrentDraftId(null);
           }}
-          onSchedule={(data, scheduledAt) => {
+          onSchedule={(data, scheduledAt, sendAsReply, replyToMessageId, replyToThreadId) => {
             api.emailFeatures.scheduleEmail({
               to: data.to,
               cc: data.cc,
@@ -1000,6 +1000,9 @@ export default function EmailsPage() {
               body: data.text,
               html: data.html,
               scheduledAt: scheduledAt.toISOString(),
+              sendAsReply: sendAsReply,
+              replyToMessageId: replyToMessageId,
+              replyToThreadId: replyToThreadId,
             }).then(() => {
               queryClient.invalidateQueries({ queryKey: ["scheduled-emails"] });
               setShowCompose(false);
@@ -1514,7 +1517,7 @@ function ComposeModal({
   autoSaveEnabled: boolean;
   onClose: () => void;
   onSend: (data: { to: string; subject: string; text: string; html?: string; cc?: string; bcc?: string }) => void;
-  onSchedule: (data: { to: string; subject: string; text: string; html?: string; cc?: string; bcc?: string }, scheduledAt: Date) => void;
+  onSchedule: (data: { to: string; subject: string; text: string; html?: string; cc?: string; bcc?: string }, scheduledAt: Date, sendAsReply?: boolean, replyToMessageId?: string, replyToThreadId?: string) => void;
   isSending: boolean;
 }) {
   const [to, setTo] = useState("");
@@ -1525,6 +1528,7 @@ function ComposeModal({
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [sendAsReply, setSendAsReply] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
@@ -1705,27 +1709,46 @@ function ComposeModal({
 
         <div className="p-4 border-t border-gray-200 space-y-3">
           {showSchedule && mode === "new" && (
-            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-              <Calendar className="w-5 h-5 text-gray-600" />
-              <input
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-                min={new Date().toISOString().split("T")[0]}
-              />
-              <input
-                type="time"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
-              />
-              <button
-                onClick={() => setShowSchedule(false)}
-                className="p-1 hover:bg-gray-200 rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-gray-600" />
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                  min={new Date().toISOString().split("T")[0]}
+                />
+                <input
+                  type="time"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                />
+                <button
+                  onClick={() => setShowSchedule(false)}
+                  className="p-1 hover:bg-gray-200 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Reply Option for Scheduled Emails */}
+              {messageId && originalMessage && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendAsReply}
+                    onChange={(e) => setSendAsReply(e.target.checked)}
+                    className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Reply className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm text-gray-700">
+                      Send as Reply (to original email thread)
+                    </span>
+                  </div>
+                </label>
+              )}
             </div>
           )}
           <div className="flex items-center justify-between">
@@ -1774,14 +1797,20 @@ function ComposeModal({
                       return;
                     }
                     const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`);
-                    onSchedule({
-                      to: to.trim(),
-                      cc: cc.trim() || undefined,
-                      bcc: bcc.trim() || undefined,
-                      subject: subject.trim(),
-                      text: body.trim(),
-                      html: body.trim().replace(/\n/g, "<br>"),
-                    }, scheduledAt);
+                    onSchedule(
+                      {
+                        to: to.trim(),
+                        cc: cc.trim() || undefined,
+                        bcc: bcc.trim() || undefined,
+                        subject: subject.trim(),
+                        text: body.trim(),
+                        html: body.trim().replace(/\n/g, "<br>"),
+                      },
+                      scheduledAt,
+                      sendAsReply && messageId ? true : undefined,
+                      sendAsReply && messageId ? messageId : undefined,
+                      sendAsReply && originalMessage?.threadId ? originalMessage.threadId : undefined
+                    );
                   }}
                   disabled={isSending || !to.trim() || !subject.trim() || !body.trim()}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"

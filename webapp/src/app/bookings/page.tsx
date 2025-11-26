@@ -17,10 +17,34 @@ import {
   MapPin,
   Phone,
   Link as LinkIcon,
-  MoreVertical,
   Trash2,
   Mail,
+  Copy,
+  Check,
+  TrendingUp,
+  Users,
+  CalendarDays,
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  ExternalLink,
 } from "lucide-react";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  startOfWeek,
+  endOfWeek,
+  isSameMonth,
+  isSameDay,
+  addMonths,
+  subMonths,
+  parseISO,
+  isToday,
+  isPast,
+} from "date-fns";
 
 type Booking = {
   id: string;
@@ -40,10 +64,14 @@ type Booking = {
   createdAt: string;
 };
 
+type ViewMode = "list" | "calendar" | "stats";
+
 export default function BookingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [filters, setFilters] = useState({
     status: "" as "" | "PENDING" | "CONFIRMED" | "CANCELLED",
     meetingTypeId: "",
@@ -52,6 +80,7 @@ export default function BookingsPage() {
     endDate: "",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -68,6 +97,7 @@ export default function BookingsPage() {
         meetingTypeId: filters.meetingTypeId || undefined,
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
+        limit: 1000,
       }),
   });
 
@@ -88,16 +118,49 @@ export default function BookingsPage() {
   const bookings = bookingsData?.bookings || [];
   const total = bookingsData?.total || 0;
 
+  // Calculate statistics
+  const stats = {
+    total: bookings.length,
+    confirmed: bookings.filter((b) => b.status === "CONFIRMED").length,
+    pending: bookings.filter((b) => b.status === "PENDING").length,
+    cancelled: bookings.filter((b) => b.status === "CANCELLED").length,
+    thisMonth: bookings.filter((b) => {
+      const bookingDate = new Date(b.startTime);
+      return (
+        bookingDate.getMonth() === new Date().getMonth() &&
+        bookingDate.getFullYear() === new Date().getFullYear()
+      );
+    }).length,
+    upcoming: bookings.filter((b) => {
+      const bookingDate = new Date(b.startTime);
+      return bookingDate >= new Date() && b.status !== "CANCELLED";
+    }).length,
+  };
+
+  // Calendar view helpers
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+  const getBookingsForDate = (date: Date) => {
+    return bookings.filter((booking) => {
+      const bookingDate = new Date(booking.startTime);
+      return isSameDay(bookingDate, date);
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "CONFIRMED":
-        return "bg-green-100 text-green-700";
+        return "bg-green-100 text-green-700 border-green-200";
       case "PENDING":
-        return "bg-yellow-100 text-yellow-700";
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
       case "CANCELLED":
-        return "bg-red-100 text-red-700";
+        return "bg-red-100 text-red-700 border-red-200";
       default:
-        return "bg-gray-100 text-gray-700";
+        return "bg-gray-100 text-gray-700 border-gray-200";
     }
   };
 
@@ -128,6 +191,25 @@ export default function BookingsPage() {
     });
   };
 
+  const copyBookingLink = (token: string) => {
+    const url = `${window.location.origin}/booking/${token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(token);
+    setTimeout(() => setCopiedLink(null), 2000);
+  };
+
+  const filteredBookings = bookings.filter((booking) => {
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      return (
+        booking.meetingType.name.toLowerCase().includes(searchLower) ||
+        booking.inviteeEmail.toLowerCase().includes(searchLower) ||
+        (booking.inviteeName && booking.inviteeName.toLowerCase().includes(searchLower))
+      );
+    }
+    return true;
+  });
+
   if (bookingsLoading) {
     return (
       <Layout>
@@ -146,10 +228,17 @@ export default function BookingsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Bookings</h1>
             <p className="text-gray-600 mt-1">
-              Manage your meeting bookings ({total} total)
+              Manage your meeting bookings and scheduling links
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/calendar/view")}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Meeting Type
+            </button>
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -157,17 +246,112 @@ export default function BookingsPage() {
               <Filter className="w-4 h-4" />
               Filters
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4" />
-              Export
-            </button>
           </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Bookings</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <CalendarDays className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Confirmed</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{stats.confirmed}</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <Check className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Upcoming</p>
+                <p className="text-2xl font-bold text-indigo-600 mt-1">{stats.upcoming}</p>
+              </div>
+              <div className="p-3 bg-indigo-100 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-indigo-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">This Month</p>
+                <p className="text-2xl font-bold text-purple-600 mt-1">{stats.thisMonth}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <BarChart3 className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              viewMode === "list"
+                ? "bg-primary-600 text-white"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            List View
+          </button>
+          <button
+            onClick={() => setViewMode("calendar")}
+            className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              viewMode === "calendar"
+                ? "bg-primary-600 text-white"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            Calendar View
+          </button>
+          <button
+            onClick={() => setViewMode("stats")}
+            className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              viewMode === "stats"
+                ? "bg-primary-600 text-white"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            Analytics
+          </button>
         </div>
 
         {/* Filters */}
         {showFilters && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={filters.search}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                    placeholder="Search bookings..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                 <select
@@ -246,98 +430,252 @@ export default function BookingsPage() {
           </div>
         )}
 
-        {/* Bookings List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          {bookings.length > 0 ? (
-            <div className="divide-y divide-gray-200">
-              {bookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  onClick={() => setSelectedBooking(booking)}
-                  className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
-                    selectedBooking?.id === booking.id ? "bg-primary-50 border-l-4 border-primary-500" : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {booking.meetingType.name}
-                        </h3>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+        {/* Content based on view mode */}
+        {viewMode === "list" && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            {filteredBookings.length > 0 ? (
+              <div className="divide-y divide-gray-200">
+                {filteredBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    onClick={() => setSelectedBooking(booking)}
+                    className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
+                      selectedBooking?.id === booking.id ? "bg-primary-50 border-l-4 border-primary-500" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {booking.meetingType.name}
+                          </h3>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                              booking.status,
+                            )}`}
+                          >
+                            {booking.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4" />
+                            <span>{formatDate(booking.startTime)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            <span>
+                              {booking.inviteeName || "Guest"} ({booking.inviteeEmail})
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {getLocationIcon(booking.meetingType.meetingLocationType)}
+                            <span className="capitalize">
+                              {booking.meetingType.meetingLocationType.replace("_", " ").toLowerCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {booking.conferenceUrl && (
+                          <div className="mt-3">
+                            <a
+                              href={booking.conferenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700"
+                            >
+                              <Video className="w-4 h-4" />
+                              Join Meeting
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {booking.status !== "CANCELLED" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("Are you sure you want to cancel this booking?")) {
+                                cancelMutation.mutate(booking.id);
+                              }
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Cancel booking"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-gray-500">
+                <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p>No bookings found</p>
+                <p className="text-sm mt-2">Bookings will appear here once recipients schedule meetings</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === "calendar" && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {format(currentMonth, "MMMM yyyy")}
+              </h2>
+              <button
+                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                <div key={day} className="text-center text-sm font-semibold text-gray-500 py-2">
+                  {day}
+                </div>
+              ))}
+              {calendarDays.map((day, idx) => {
+                const dayBookings = getBookingsForDate(day);
+                const isCurrentMonth = isSameMonth(day, currentMonth);
+                const isCurrentDay = isToday(day);
+
+                return (
+                  <div
+                    key={idx}
+                    className={`min-h-[100px] p-2 border rounded-lg ${
+                      isCurrentMonth ? "bg-white" : "bg-gray-50"
+                    } ${isCurrentDay ? "border-primary-500 border-2" : "border-gray-200"}`}
+                  >
+                    <div
+                      className={`text-sm font-medium mb-1 ${
+                        isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                      } ${isCurrentDay ? "text-primary-600" : ""}`}
+                    >
+                      {format(day, "d")}
+                    </div>
+                    <div className="space-y-1">
+                      {dayBookings.slice(0, 3).map((booking) => (
+                        <div
+                          key={booking.id}
+                          onClick={() => setSelectedBooking(booking)}
+                          className={`text-xs p-1 rounded cursor-pointer truncate ${getStatusColor(
                             booking.status,
                           )}`}
+                          title={`${booking.meetingType.name} - ${formatDate(booking.startTime)}`}
                         >
-                          {booking.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          <span>{formatDate(booking.startTime)}</span>
+                          {format(parseISO(booking.startTime), "HH:mm")} {booking.meetingType.name}
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4" />
-                          <span>
-                            {booking.inviteeName || "Guest"} ({booking.inviteeEmail})
-                          </span>
+                      ))}
+                      {dayBookings.length > 3 && (
+                        <div className="text-xs text-gray-500">
+                          +{dayBookings.length - 3} more
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          {getLocationIcon(booking.meetingType.meetingLocationType)}
-                          <span className="capitalize">
-                            {booking.meetingType.meetingLocationType.replace("_", " ").toLowerCase()}
-                          </span>
-                        </div>
-                      </div>
-
-                      {booking.conferenceUrl && (
-                        <div className="mt-3">
-                          <a
-                            href={booking.conferenceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700"
-                          >
-                            <Video className="w-4 h-4" />
-                            Join Meeting
-                          </a>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {booking.status !== "CANCELLED" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm("Are you sure you want to cancel this booking?")) {
-                              cancelMutation.mutate(booking.id);
-                            }
-                          }}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Cancel booking"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
                       )}
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {viewMode === "stats" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Status Distribution</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Confirmed</span>
+                    <span className="text-sm font-semibold text-gray-900">{stats.confirmed}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{ width: `${stats.total > 0 ? (stats.confirmed / stats.total) * 100 : 0}%` }}
+                    ></div>
+                  </div>
                 </div>
-              ))}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Pending</span>
+                    <span className="text-sm font-semibold text-gray-900">{stats.pending}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-yellow-600 h-2 rounded-full"
+                      style={{ width: `${stats.total > 0 ? (stats.pending / stats.total) * 100 : 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Cancelled</span>
+                    <span className="text-sm font-semibold text-gray-900">{stats.cancelled}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-red-600 h-2 rounded-full"
+                      style={{ width: `${stats.total > 0 ? (stats.cancelled / stats.total) * 100 : 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="p-12 text-center text-gray-500">
-              <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p>No bookings found</p>
-              <p className="text-sm mt-2">Bookings will appear here once recipients schedule meetings</p>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Meeting Types</h3>
+              <div className="space-y-3">
+                {meetingTypes?.slice(0, 5).map((mt) => {
+                  const typeBookings = bookings.filter((b) => b.meetingType.id === mt.id);
+                  return (
+                    <div key={mt.id} className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{mt.name}</p>
+                        <p className="text-xs text-gray-500">{typeBookings.length} bookings</p>
+                      </div>
+                      {mt.bookingLinks && mt.bookingLinks.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          {mt.bookingLinks.map((link) => (
+                            <button
+                              key={link.id}
+                              onClick={() => copyBookingLink(link.token)}
+                              className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                              title="Copy booking link"
+                            >
+                              {copiedLink === link.token ? (
+                                <Check className="w-4 h-4" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Booking Detail Modal */}
         {selectedBooking && (
@@ -363,9 +701,7 @@ export default function BookingsPage() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Time</h3>
                   <p className="text-gray-900">{formatDate(selectedBooking.startTime)}</p>
-                  <p className="text-sm text-gray-600">
-                    Ends at {formatDate(selectedBooking.endTime)}
-                  </p>
+                  <p className="text-sm text-gray-600">Ends at {formatDate(selectedBooking.endTime)}</p>
                 </div>
 
                 <div>
@@ -387,7 +723,7 @@ export default function BookingsPage() {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Status</h3>
                   <span
-                    className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                    className={`inline-block px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(
                       selectedBooking.status,
                     )}`}
                   >
@@ -434,8 +770,3 @@ export default function BookingsPage() {
     </Layout>
   );
 }
-
-
-
-
-
