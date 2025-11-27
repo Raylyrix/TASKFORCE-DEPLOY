@@ -8,10 +8,11 @@ let redisBullMQInstance: IORedis | null = null;
 
 /**
  * Get Redis connection for general use (caching, rate limiting, etc.)
+ * Returns null if Redis is not configured (instead of throwing)
  */
-export const getRedis = () => {
+export const getRedis = (): IORedis | null => {
   if (!AppConfig.redisUrl) {
-    throw new Error("REDIS_URL is not configured");
+    return null; // Return null instead of throwing
   }
   
   if (!redisInstance) {
@@ -48,10 +49,11 @@ export const getRedis = () => {
 /**
  * Get Redis connection for BullMQ
  * BullMQ requires maxRetriesPerRequest to be null for blocking operations
+ * Returns null if Redis is not configured (instead of throwing)
  */
-export const getRedisForBullMQ = () => {
+export const getRedisForBullMQ = (): IORedis | null => {
   if (!AppConfig.redisUrl) {
-    throw new Error("REDIS_URL is not configured");
+    return null; // Return null instead of throwing
   }
   
   if (!redisBullMQInstance) {
