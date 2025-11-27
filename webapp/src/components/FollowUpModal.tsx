@@ -336,8 +336,7 @@ export default function FollowUpModal({
                   )}
                 </div>
               </div>
-            );
-            })}
+            ))}
           </div>
         </div>
 
