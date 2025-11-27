@@ -138,42 +138,53 @@ export const registerScheduledEmailWorker = () =>
  * Check for scheduled emails that are ready to send and queue them
  */
 export const processScheduledEmails = async () => {
-  const now = new Date();
-
-  const readyEmails = await prisma.scheduledEmail.findMany({
-    where: {
-      status: "PENDING",
-      scheduledAt: {
-        lte: now,
-      },
-    },
-    take: 100, // Process in batches
-  });
-
-  logger.info({ count: readyEmails.length }, "Found scheduled emails ready to send");
-
-  for (const email of readyEmails) {
-    try {
-      await scheduledEmailQueue.add(
-        `scheduled-email-${email.id}`,
-        {
-          scheduledEmailId: email.id,
-          userId: email.userId,
-        },
-        {
-          jobId: `scheduled-email-${email.id}`,
-          attempts: 3,
-          backoff: {
-            type: "exponential",
-            delay: 5000,
-          },
-        },
-      );
-    } catch (error) {
-      logger.error({ error, scheduledEmailId: email.id }, "Failed to queue scheduled email");
-    }
+  // Skip if database is not configured
+  if (!process.env.DATABASE_URL) {
+    logger.debug("DATABASE_URL not set, skipping scheduled email processing");
+    return 0;
   }
 
-  return readyEmails.length;
+  try {
+    const now = new Date();
+
+    const readyEmails = await prisma.scheduledEmail.findMany({
+      where: {
+        status: "PENDING",
+        scheduledAt: {
+          lte: now,
+        },
+      },
+      take: 100, // Process in batches
+    });
+
+    logger.info({ count: readyEmails.length }, "Found scheduled emails ready to send");
+
+    for (const email of readyEmails) {
+      try {
+        await scheduledEmailQueue.add(
+          `scheduled-email-${email.id}`,
+          {
+            scheduledEmailId: email.id,
+            userId: email.userId,
+          },
+          {
+            jobId: `scheduled-email-${email.id}`,
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 5000,
+            },
+          },
+        );
+      } catch (error) {
+        logger.error({ error, scheduledEmailId: email.id }, "Failed to queue scheduled email");
+      }
+    }
+
+    return readyEmails.length;
+  } catch (error) {
+    logger.error({ error }, "Error processing scheduled emails - database may not be available");
+    return 0;
+  }
 };
 
