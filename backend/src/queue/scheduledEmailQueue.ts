@@ -43,54 +43,50 @@ export const registerScheduledEmailWorker = () =>
       }
 
       // Check if we should send as reply
-      const metadata = scheduledEmail.metadata as {
-        sendAsReply?: boolean;
-        replyToMessageId?: string;
-        replyToThreadId?: string;
-      } | null;
-
-      const sendAsReply = metadata?.sendAsReply ?? false;
-      let threadId: string | null = null;
+      const sendAsReply = scheduledEmail.sendAsReply ?? false;
+      let threadId: string | null = scheduledEmail.threadId || scheduledEmail.replyToThreadId || null;
       let replyHeaders: Record<string, string> = {};
 
       if (sendAsReply) {
         // Get thread ID from replyToMessageId or use replyToThreadId
-        if (metadata?.replyToThreadId) {
-          threadId = metadata.replyToThreadId;
-        } else if (metadata?.replyToMessageId) {
+        if (scheduledEmail.replyToThreadId) {
+          threadId = scheduledEmail.replyToThreadId;
+        } else if (scheduledEmail.replyToMessageId) {
           try {
             const client = await googleAuthService.getAuthorizedClientForUser(userId);
             const gmail = google.gmail({ version: "v1", auth: client });
             const message = await gmail.users.messages.get({
               userId: "me",
-              id: metadata.replyToMessageId,
+              id: scheduledEmail.replyToMessageId,
               format: "metadata",
               metadataHeaders: ["Message-ID", "In-Reply-To", "References"],
             });
             threadId = message.data.threadId || null;
             
             // Set reply headers
-            if (threadId) {
+            if (threadId && scheduledEmail.replyToMessageId) {
               replyHeaders = {
-                "In-Reply-To": metadata.replyToMessageId,
-                "References": metadata.replyToMessageId,
+                "In-Reply-To": scheduledEmail.replyToMessageId,
+                "References": scheduledEmail.replyToMessageId,
               };
-              // Modify subject to add "Re: " prefix if not already present
-              if (!scheduledEmail.subject.startsWith("Re:") && !scheduledEmail.subject.startsWith("RE:")) {
-                scheduledEmail.subject = `Re: ${scheduledEmail.subject}`;
-              }
             }
           } catch (error) {
-            logger.error({ error, replyToMessageId: metadata.replyToMessageId }, "Failed to get thread ID for reply");
+            logger.error({ error, replyToMessageId: scheduledEmail.replyToMessageId }, "Failed to get thread ID for reply");
           }
         }
+      }
+
+      // Prepare subject - add "Re: " prefix for replies if not already present
+      let emailSubject = scheduledEmail.subject;
+      if (sendAsReply && !emailSubject.startsWith("Re:") && !emailSubject.startsWith("RE:")) {
+        emailSubject = `Re: ${emailSubject}`;
       }
 
       // Use gmailDeliveryService for consistent email sending
       const result = await gmailDeliveryService.sendEmailViaGmail({
         userId,
         to: scheduledEmail.to,
-        subject: scheduledEmail.subject,
+        subject: emailSubject,
         bodyHtml: scheduledEmail.html || scheduledEmail.body.replace(/\n/g, "<br>"),
         cc: scheduledEmail.cc ? [scheduledEmail.cc] : undefined,
         bcc: scheduledEmail.bcc ? [scheduledEmail.bcc] : undefined,

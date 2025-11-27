@@ -149,6 +149,7 @@ const scheduledEmailSchema = z.object({
   sendAsReply: z.boolean().optional().default(false), // New: send as reply or separate email
   replyToMessageId: z.string().optional(), // New: message ID to reply to
   replyToThreadId: z.string().optional(), // New: thread ID to reply to
+  threadId: z.string().optional(), // New: thread ID (can be derived from replyToThreadId)
 });
 
 emailFeaturesRouter.post("/scheduled", requireUser, async (req, res, next) => {
@@ -170,11 +171,10 @@ emailFeaturesRouter.post("/scheduled", requireUser, async (req, res, next) => {
         body: payload.body,
         html: payload.html,
         scheduledAt: new Date(payload.scheduledAt),
-        metadata: {
-          sendAsReply: payload.sendAsReply ?? false,
-          replyToMessageId: payload.replyToMessageId,
-          replyToThreadId: payload.replyToThreadId,
-        },
+        sendAsReply: payload.sendAsReply ?? false,
+        replyToMessageId: payload.replyToMessageId ?? null,
+        replyToThreadId: payload.replyToThreadId ?? null,
+        threadId: payload.threadId ?? null,
       },
     });
 

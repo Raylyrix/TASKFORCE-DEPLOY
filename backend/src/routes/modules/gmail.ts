@@ -129,7 +129,7 @@ gmailRouter.post("/labels", requireUser, async (req, res, next) => {
     // Invalidate cache
     const cacheKey = cacheKeys.emailLabels(currentUser.id);
     try {
-      await cache.del(cacheKey);
+      await cache.delete(cacheKey);
     } catch (error) {
       // Cache error is non-critical
     }

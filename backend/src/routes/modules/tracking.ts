@@ -178,14 +178,14 @@ trackingRouter.get("/daily-analytics", requireUser, async (req, res, next) => {
         createdAt: {
           gte: startDate,
         },
-        messageLog: {
+        message: {
           campaign: {
             userId: currentUser.id,
           },
         },
       },
       include: {
-        messageLog: {
+        message: {
           select: {
             id: true,
             sendAt: true,
