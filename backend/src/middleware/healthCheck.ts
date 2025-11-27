@@ -41,26 +41,30 @@ export const healthCheck: RequestHandler = async (req, res) => {
     logger.warn({ error }, "Database health check error");
   }
 
-  try {
-    // Check Redis - only if REDIS_URL is configured
-    if (process.env.REDIS_URL) {
-      try {
-        const redis = getRedis();
-        await redis.ping();
-        health.services.redis = "ok";
-      } catch (error) {
-        health.services.redis = "error";
-        health.status = "degraded";
-        logger.warn({ error }, "Redis health check failed");
-      }
-    } else {
-      health.services.redis = "not_configured";
-    }
-  } catch (error) {
-    health.services.redis = "error";
-    health.status = "degraded";
-    logger.warn({ error }, "Redis health check error");
-  }
+        try {
+          // Check Redis - only if REDIS_URL is configured
+          if (process.env.REDIS_URL) {
+            try {
+              const redis = getRedis();
+              if (redis) {
+                await redis.ping();
+                health.services.redis = "ok";
+              } else {
+                health.services.redis = "not_configured";
+              }
+            } catch (error) {
+              health.services.redis = "error";
+              health.status = "degraded";
+              logger.warn({ error }, "Redis health check failed");
+            }
+          } else {
+            health.services.redis = "not_configured";
+          }
+        } catch (error) {
+          health.services.redis = "error";
+          health.status = "degraded";
+          logger.warn({ error }, "Redis health check error");
+        }
 
   // Always return 200 for Railway health checks - they just need to know the server is responding
   res.status(200).json(health);
