@@ -150,7 +150,7 @@ export default function FollowUpModal({
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Follow-up Steps</h3>
               <button
-                onClick={addStep}
+                onClick={() => addStep()}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />
