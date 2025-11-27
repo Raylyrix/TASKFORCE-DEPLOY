@@ -15,6 +15,12 @@ export const createApp = () => {
   // Trust proxy for accurate IP addresses (important for rate limiting)
   app.set("trust proxy", 1);
 
+  // Health check endpoints FIRST - before any middleware that might fail
+  // This ensures health checks work even if other middleware fails
+  app.get("/health", healthCheck);
+  app.get("/ready", readinessCheck);
+  app.get("/live", livenessCheck);
+
   app.use(
     cors({
       origin: true,
@@ -25,23 +31,30 @@ export const createApp = () => {
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   // Security middleware (order matters!)
-  app.use(requestId); // Add request ID for tracking
-  app.use(securityHeaders); // Security headers
-  app.use(xssProtection); // XSS protection
-  app.use(requestSizeLimit); // Request size limiting
+  try {
+    app.use(requestId); // Add request ID for tracking
+    app.use(securityHeaders); // Security headers
+    app.use(xssProtection); // XSS protection
+    app.use(requestSizeLimit); // Request size limiting
+  } catch (error) {
+    console.warn("[APP] Some security middleware failed to initialize:", error);
+  }
 
-  // Redis-based rate limiting
-  app.use(rateLimit);
+  // Redis-based rate limiting (may fail if Redis is unavailable)
+  try {
+    app.use(rateLimit);
+  } catch (error) {
+    console.warn("[APP] Rate limiting middleware failed to initialize:", error);
+  }
 
   // Audit logging for all requests
-  app.use(auditLogger);
+  try {
+    app.use(auditLogger);
+  } catch (error) {
+    console.warn("[APP] Audit logging middleware failed to initialize:", error);
+  }
 
   app.use("/api", router);
-
-  // Health check endpoints
-  app.get("/health", healthCheck);
-  app.get("/ready", readinessCheck);
-  app.get("/live", livenessCheck);
 
   app.use((req, res) => {
     res.status(404).json({ error: "Not found" });
