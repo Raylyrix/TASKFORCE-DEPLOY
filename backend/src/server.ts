@@ -13,6 +13,20 @@ async function runMigrations() {
     try {
       const { execSync } = require("child_process");
       logger.info("Running database migrations...");
+      
+      // First, try to resolve any failed migrations
+      try {
+        execSync("npx prisma migrate resolve --rolled-back 20251112153000_meeting_reminders", { 
+          stdio: "pipe",
+          cwd: process.cwd()
+        });
+        logger.info("Resolved failed migration");
+      } catch (resolveError) {
+        // Ignore if migration doesn't exist or already resolved
+        logger.debug("Migration resolve attempt (may already be resolved)");
+      }
+      
+      // Now run migrations
       execSync("npx prisma migrate deploy", { stdio: "inherit" });
       logger.info("Database migrations completed");
     } catch (error) {
