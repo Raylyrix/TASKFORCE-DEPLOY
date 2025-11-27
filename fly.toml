@@ -1,0 +1,31 @@
+# Fly.io Configuration for Backend Service
+# Run: fly launch (in backend/ directory) to create this automatically
+# This is a template - adjust as needed
+
+app = "taskforce-backend"
+primary_region = "iad"  # Change to your preferred region
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false  # Keep running (within free tier)
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+# Add secrets via: fly secrets set KEY=value
+# DATABASE_URL will be set when attaching PostgreSQL
+# REDIS_URL will be set when attaching Redis
+

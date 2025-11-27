@@ -1,0 +1,47 @@
+# Railway.app Configuration
+# This file helps Railway auto-detect and configure your services
+
+# Railway will auto-detect services from your repo structure
+# No explicit configuration needed, but this file helps with settings
+
+# Backend Service (auto-detected from backend/ folder)
+# Build: cd backend && npm ci && npx prisma generate && npm run build
+# Start: cd backend && npm start
+# Port: 3000 (or PORT env var)
+
+# Frontend Service (auto-detected from webapp/ folder)
+# Build: cd webapp && npm ci && npm run build
+# Start: cd webapp && npm start
+# Port: 3000 (or PORT env var)
+
+# Environment Variables (set in Railway Dashboard):
+# Backend:
+#   - NODE_ENV=production
+#   - PORT=3000
+#   - DATABASE_URL (from PostgreSQL service)
+#   - REDIS_URL (from Redis service)
+#   - GOOGLE_CLIENT_ID
+#   - GOOGLE_CLIENT_SECRET
+#   - GOOGLE_REDIRECT_URI
+#   - SESSION_SECRET (generate random)
+#   - BACKEND_PUBLIC_URL (Railway provides this)
+#
+# Frontend:
+#   - NODE_ENV=production
+#   - PORT=3000
+#   - NEXT_PUBLIC_API_URL (backend service URL)
+#   - NEXT_PUBLIC_GOOGLE_CLIENT_ID
+
+# Services to create in Railway:
+# 1. PostgreSQL Database (from Marketplace)
+# 2. Redis Database (from Marketplace)
+# 3. Backend Web Service (from GitHub repo, root: backend/)
+# 4. Frontend Web Service (from GitHub repo, root: webapp/)
+
+# Railway will automatically:
+# - Detect Node.js projects
+# - Install dependencies
+# - Build and deploy
+# - Provide HTTPS URLs
+# - Connect services via environment variables
+
