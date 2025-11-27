@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p .",
+    "build:railway": "npm ci && npx prisma generate && npm run build",
     "start": "node dist/server.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "prisma:generate": "prisma generate",
