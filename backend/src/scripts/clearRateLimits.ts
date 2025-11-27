@@ -10,6 +10,11 @@ import { logger } from "../lib/logger";
 async function clearRateLimits() {
   try {
     const redis = getRedis();
+    if (!redis) {
+      logger.error("Redis not available, cannot clear rate limits");
+      process.exit(1);
+      return;
+    }
     
     // Find all rate limit keys
     const keys = await redis.keys("rate_limit:*");

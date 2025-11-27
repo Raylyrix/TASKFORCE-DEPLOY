@@ -95,16 +95,20 @@ async function startServer() {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { getRedis } = require("./lib/redis");
             const redis = getRedis();
-            redis.keys("rate_limit:*").then((keys: string[]) => {
-              if (keys.length > 0) {
-                logger.info({ count: keys.length }, "Clearing old rate limit keys on startup");
-                redis.del(...keys).catch((error: unknown) => {
-                  logger.warn({ error }, "Failed to clear old rate limit keys");
-                });
-              }
-            }).catch((error: unknown) => {
-              logger.warn({ error }, "Failed to check for old rate limit keys");
-            });
+            if (redis) {
+              redis.keys("rate_limit:*").then((keys: string[]) => {
+                if (keys.length > 0) {
+                  logger.info({ count: keys.length }, "Clearing old rate limit keys on startup");
+                  redis.del(...keys).catch((error: unknown) => {
+                    logger.warn({ error }, "Failed to clear old rate limit keys");
+                  });
+                }
+              }).catch((error: unknown) => {
+                logger.warn({ error }, "Failed to check for old rate limit keys");
+              });
+            } else {
+              logger.warn("Redis not available, skipping rate limit clearing");
+            }
           } catch (error) {
             logger.warn({ error }, "Failed to initialize Redis for rate limit clearing");
           }

@@ -29,6 +29,9 @@ export const oauthStateStore = {
 
     try {
       const redis = getRedis();
+      if (!redis) {
+        throw new Error("Redis not available");
+      }
       const key = `oauth_state:${state}`;
       // Store in Redis with expiration
       await redis.setex(key, STATE_TTL_SECONDS, JSON.stringify(entry));
@@ -44,6 +47,10 @@ export const oauthStateStore = {
   async consume(state: string): Promise<OAuthStateEntry | null> {
     try {
       const redis = getRedis();
+      if (!redis) {
+        logger.error({ state }, "Redis not available for OAuth state consumption");
+        return null;
+      }
       const key = `oauth_state:${state}`;
       const stored = await redis.get(key);
       

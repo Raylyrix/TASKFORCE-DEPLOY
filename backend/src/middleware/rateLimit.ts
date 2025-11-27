@@ -41,12 +41,10 @@ export const rateLimit: RequestHandler = async (req, res, next) => {
     const windowStart = Math.floor(now / RATE_LIMIT_WINDOW);
     const key = `rate_limit:${ip}:${windowStart}`;
     
-    let redis;
-    try {
-      redis = getRedis();
-    } catch (error) {
+    const redis = getRedis();
+    if (!redis) {
       // If Redis is not available, allow request (fail open)
-      logger.warn({ error }, "Redis not available for rate limiting, allowing request");
+      logger.warn("Redis not available for rate limiting, allowing request");
       return next();
     }
 
@@ -107,6 +105,12 @@ export const userRateLimit: RequestHandler = async (req, res, next) => {
     const windowStart = Math.floor(now / RATE_LIMIT_WINDOW);
     const key = `rate_limit:user:${userId}:${windowStart}`;
     const redis = getRedis();
+    
+    if (!redis) {
+      // If Redis is not available, allow request (fail open)
+      logger.warn("Redis not available for user rate limiting, allowing request");
+      return next();
+    }
 
     // Use INCR which returns the new value
     const count = await redis.incr(key);
