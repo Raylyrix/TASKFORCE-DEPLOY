@@ -8,16 +8,18 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z
     .string()
+    .transform((val) => (val === "" ? undefined : val))
     .optional()
     .refine(
-      (val) => !val || z.string().url().safeParse(val).success,
+      (val) => val === undefined || z.string().url().safeParse(val).success,
       { message: "DATABASE_URL must be a valid URL if provided" }
     ),
   REDIS_URL: z
     .string()
+    .transform((val) => (val === "" ? undefined : val))
     .optional()
     .refine(
-      (val) => !val || z.string().url().safeParse(val).success,
+      (val) => val === undefined || z.string().url().safeParse(val).success,
       { message: "REDIS_URL must be a valid URL if provided" }
     ),
   BACKEND_PUBLIC_URL: z.string().url().optional(),
