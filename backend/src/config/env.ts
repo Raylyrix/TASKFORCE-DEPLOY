@@ -6,8 +6,20 @@ config();
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().optional(),
-  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }).optional(),
-  REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
+  DATABASE_URL: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || z.string().url().safeParse(val).success,
+      { message: "DATABASE_URL must be a valid URL if provided" }
+    ),
+  REDIS_URL: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || z.string().url().safeParse(val).success,
+      { message: "REDIS_URL must be a valid URL if provided" }
+    ),
   BACKEND_PUBLIC_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
