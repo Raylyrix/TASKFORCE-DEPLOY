@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 /**
  * Health check endpoint handler
  * Checks database, Redis, and overall system health
+ * Returns 200 even if services are degraded (for Railway health checks)
  */
 export const healthCheck: RequestHandler = async (req, res) => {
   const health = {
@@ -27,7 +28,7 @@ export const healthCheck: RequestHandler = async (req, res) => {
   } catch (error) {
     health.services.database = "error";
     health.status = "degraded";
-    logger.error({ error }, "Database health check failed");
+    logger.warn({ error }, "Database health check failed");
   }
 
   try {
@@ -38,11 +39,11 @@ export const healthCheck: RequestHandler = async (req, res) => {
   } catch (error) {
     health.services.redis = "error";
     health.status = "degraded";
-    logger.error({ error }, "Redis health check failed");
+    logger.warn({ error }, "Redis health check failed");
   }
 
-  const statusCode = health.status === "ok" ? 200 : 503;
-  res.status(statusCode).json(health);
+  // Always return 200 for Railway health checks - they just need to know the server is responding
+  res.status(200).json(health);
 };
 
 /**

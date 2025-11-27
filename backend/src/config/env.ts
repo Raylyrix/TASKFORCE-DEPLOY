@@ -6,8 +6,8 @@ config();
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().optional(),
-  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
-  REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }),
+  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }).optional(),
+  REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }).optional(),
   BACKEND_PUBLIC_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
@@ -56,9 +56,9 @@ if (missingSecrets.length > 0) {
 
 export const AppConfig = {
   nodeEnv: env.NODE_ENV,
-  port: env.PORT ?? 4000,
-  databaseUrl: env.DATABASE_URL,
-  redisUrl: env.REDIS_URL,
+  port: env.PORT ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 4000),
+  databaseUrl: env.DATABASE_URL ?? "",
+  redisUrl: env.REDIS_URL ?? "",
   publicUrl: env.BACKEND_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
   google: {
     clientId: env.GOOGLE_CLIENT_ID ?? "",

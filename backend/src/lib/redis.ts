@@ -10,10 +10,15 @@ let redisBullMQInstance: IORedis | null = null;
  * Get Redis connection for general use (caching, rate limiting, etc.)
  */
 export const getRedis = () => {
+  if (!AppConfig.redisUrl) {
+    throw new Error("REDIS_URL is not configured");
+  }
+  
   if (!redisInstance) {
     redisInstance = new IORedis(AppConfig.redisUrl, {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
+      lazyConnect: true, // Don't connect immediately
       // Connection pool settings for 100 concurrent users
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
@@ -30,6 +35,11 @@ export const getRedis = () => {
     redisInstance.on("connect", () => {
       logger.info("Redis connected");
     });
+    
+    // Attempt to connect, but don't block if it fails
+    redisInstance.connect().catch((error) => {
+      logger.warn({ error }, "Failed to connect to Redis, will retry on first use");
+    });
   }
 
   return redisInstance;
@@ -40,10 +50,15 @@ export const getRedis = () => {
  * BullMQ requires maxRetriesPerRequest to be null for blocking operations
  */
 export const getRedisForBullMQ = () => {
+  if (!AppConfig.redisUrl) {
+    throw new Error("REDIS_URL is not configured");
+  }
+  
   if (!redisBullMQInstance) {
     redisBullMQInstance = new IORedis(AppConfig.redisUrl, {
       maxRetriesPerRequest: null, // Required by BullMQ for blocking operations
       enableReadyCheck: true,
+      lazyConnect: true, // Don't connect immediately
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -57,6 +72,11 @@ export const getRedisForBullMQ = () => {
 
     redisBullMQInstance.on("connect", () => {
       logger.info("Redis BullMQ connected");
+    });
+    
+    // Attempt to connect, but don't block if it fails
+    redisBullMQInstance.connect().catch((error) => {
+      logger.warn({ error }, "Failed to connect to Redis for BullMQ, will retry on first use");
     });
   }
 

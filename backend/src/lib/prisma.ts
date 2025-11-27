@@ -7,6 +7,10 @@ const prismaGlobal = globalThis as typeof globalThis & {
 };
 
 const createClient = () => {
+  if (!AppConfig.databaseUrl) {
+    throw new Error("DATABASE_URL is not configured");
+  }
+  
   // For production with thousands of users:
   // Configure connection pool in DATABASE_URL:
   // Format: postgresql://user:pass@host:port/db?connection_limit=100&pool_timeout=20&connect_timeout=10

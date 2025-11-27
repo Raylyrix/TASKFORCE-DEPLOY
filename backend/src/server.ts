@@ -27,26 +27,38 @@ async function runMigrations() {
 // Run migrations before starting the server
 runMigrations().then(() => {
   // Initialize query logger for slow query monitoring
-  initializeQueryLogger();
+  try {
+    initializeQueryLogger();
+  } catch (error) {
+    logger.warn({ error }, "Failed to initialize query logger, continuing");
+  }
 
-  // Initialize background job queues
-  initializeQueues();
+  // Initialize background job queues (non-blocking)
+  try {
+    initializeQueues();
+  } catch (error) {
+    logger.warn({ error }, "Failed to initialize queues, continuing");
+  }
 
   // Clear old rate limit keys on startup (optional, helps with stale keys)
   if (process.env.CLEAR_RATE_LIMITS_ON_STARTUP === "true") {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getRedis } = require("./lib/redis");
-    const redis = getRedis();
-    redis.keys("rate_limit:*").then((keys: string[]) => {
-      if (keys.length > 0) {
-        logger.info({ count: keys.length }, "Clearing old rate limit keys on startup");
-        redis.del(...keys).catch((error: unknown) => {
-          logger.warn({ error }, "Failed to clear old rate limit keys");
-        });
-      }
-    }).catch((error: unknown) => {
-      logger.warn({ error }, "Failed to check for old rate limit keys");
-    });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getRedis } = require("./lib/redis");
+      const redis = getRedis();
+      redis.keys("rate_limit:*").then((keys: string[]) => {
+        if (keys.length > 0) {
+          logger.info({ count: keys.length }, "Clearing old rate limit keys on startup");
+          redis.del(...keys).catch((error: unknown) => {
+            logger.warn({ error }, "Failed to clear old rate limit keys");
+          });
+        }
+      }).catch((error: unknown) => {
+        logger.warn({ error }, "Failed to check for old rate limit keys");
+      });
+    } catch (error) {
+      logger.warn({ error }, "Failed to initialize Redis for rate limit clearing");
+    }
   }
 
   // Schedule periodic calendar syncs every 15 minutes
@@ -92,7 +104,8 @@ runMigrations().then(() => {
   });
 
   const app = createApp();
-  const server = app.listen(AppConfig.port, () => {
+  // Listen on 0.0.0.0 to accept connections from any interface (required for Railway)
+  const server = app.listen(AppConfig.port, "0.0.0.0", () => {
     logger.info(
       { port: AppConfig.port, env: AppConfig.nodeEnv },
       "Backend service listening",

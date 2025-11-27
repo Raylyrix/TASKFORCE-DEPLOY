@@ -40,7 +40,15 @@ export const rateLimit: RequestHandler = async (req, res, next) => {
     const now = Math.floor(Date.now() / 1000);
     const windowStart = Math.floor(now / RATE_LIMIT_WINDOW);
     const key = `rate_limit:${ip}:${windowStart}`;
-    const redis = getRedis();
+    
+    let redis;
+    try {
+      redis = getRedis();
+    } catch (error) {
+      // If Redis is not available, allow request (fail open)
+      logger.warn({ error }, "Redis not available for rate limiting, allowing request");
+      return next();
+    }
 
     // Use INCR which returns the new value, and set expiration on first increment
     const count = await redis.incr(key);
