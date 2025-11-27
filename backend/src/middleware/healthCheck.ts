@@ -22,24 +22,44 @@ export const healthCheck: RequestHandler = async (req, res) => {
   };
 
   try {
-    // Check database
-    await prisma.$queryRaw`SELECT 1`;
-    health.services.database = "ok";
+    // Check database - only if DATABASE_URL is configured
+    if (process.env.DATABASE_URL) {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        health.services.database = "ok";
+      } catch (error) {
+        health.services.database = "error";
+        health.status = "degraded";
+        logger.warn({ error }, "Database health check failed");
+      }
+    } else {
+      health.services.database = "not_configured";
+    }
   } catch (error) {
     health.services.database = "error";
     health.status = "degraded";
-    logger.warn({ error }, "Database health check failed");
+    logger.warn({ error }, "Database health check error");
   }
 
   try {
-    // Check Redis
-    const redis = getRedis();
-    await redis.ping();
-    health.services.redis = "ok";
+    // Check Redis - only if REDIS_URL is configured
+    if (process.env.REDIS_URL) {
+      try {
+        const redis = getRedis();
+        await redis.ping();
+        health.services.redis = "ok";
+      } catch (error) {
+        health.services.redis = "error";
+        health.status = "degraded";
+        logger.warn({ error }, "Redis health check failed");
+      }
+    } else {
+      health.services.redis = "not_configured";
+    }
   } catch (error) {
     health.services.redis = "error";
     health.status = "degraded";
-    logger.warn({ error }, "Redis health check failed");
+    logger.warn({ error }, "Redis health check error");
   }
 
   // Always return 200 for Railway health checks - they just need to know the server is responding

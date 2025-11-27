@@ -8,7 +8,12 @@ const prismaGlobal = globalThis as typeof globalThis & {
 
 const createClient = () => {
   if (!AppConfig.databaseUrl) {
-    throw new Error("DATABASE_URL is not configured");
+    // Return a mock client that throws on use, but doesn't crash on import
+    return new Proxy({} as PrismaClient, {
+      get() {
+        throw new Error("DATABASE_URL is not configured");
+      },
+    });
   }
   
   // For production with thousands of users:

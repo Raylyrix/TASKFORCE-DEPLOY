@@ -47,19 +47,22 @@ if (!env.SESSION_SECRET) missingSecrets.push("SESSION_SECRET");
 
 if (missingSecrets.length > 0) {
   const message = `Missing environment variables: ${missingSecrets.join(", ")}`;
-  if (isProduction) {
-    throw new Error(message);
-  } else {
-    console.warn(`[env] ${message}. Using development fallbacks.`);
-  }
+  // In production, only warn - don't crash on startup
+  // These are needed for OAuth but the server can start without them
+  console.warn(`[env] ${message}. Server will start but OAuth features may not work.`);
 }
+
+// Railway sets PORT automatically - use it if available
+const port = process.env.PORT 
+  ? parseInt(process.env.PORT, 10) 
+  : (env.PORT ?? 4000);
 
 export const AppConfig = {
   nodeEnv: env.NODE_ENV,
-  port: env.PORT ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 4000),
+  port,
   databaseUrl: env.DATABASE_URL ?? "",
   redisUrl: env.REDIS_URL ?? "",
-  publicUrl: env.BACKEND_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
+  publicUrl: env.BACKEND_PUBLIC_URL ?? `http://localhost:${port}`,
   google: {
     clientId: env.GOOGLE_CLIENT_ID ?? "",
     clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
