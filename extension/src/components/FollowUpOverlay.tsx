@@ -240,17 +240,53 @@ export const FollowUpOverlay = () => {
                         type="datetime-local"
                         value={
                           step.scheduledAt
-                            ? new Date(step.scheduledAt).toISOString().slice(0, 16)
-                            : new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().slice(0, 16)
+                            ? (() => {
+                                // Convert ISO string to local datetime-local format
+                                const date = new Date(step.scheduledAt);
+                                const year = date.getFullYear();
+                                const month = String(date.getMonth() + 1).padStart(2, "0");
+                                const day = String(date.getDate()).padStart(2, "0");
+                                const hours = String(date.getHours()).padStart(2, "0");
+                                const minutes = String(date.getMinutes()).padStart(2, "0");
+                                return `${year}-${month}-${day}T${hours}:${minutes}`;
+                              })()
+                            : (() => {
+                                // Default: 48 hours from now in local time
+                                const date = new Date(Date.now() + 48 * 60 * 60 * 1000);
+                                const year = date.getFullYear();
+                                const month = String(date.getMonth() + 1).padStart(2, "0");
+                                const day = String(date.getDate()).padStart(2, "0");
+                                const hours = String(date.getHours()).padStart(2, "0");
+                                const minutes = String(date.getMinutes()).padStart(2, "0");
+                                return `${year}-${month}-${day}T${hours}:${minutes}`;
+                              })()
                         }
                         onChange={(event) => {
                           const dateTime = event.target.value;
                           if (dateTime) {
-                            const scheduledAt = new Date(dateTime).toISOString();
+                            // Parse datetime-local string (local time) and convert to ISO
+                            // datetime-local format: "YYYY-MM-DDTHH:mm" (no timezone, treated as local)
+                            const [datePart, timePart] = dateTime.split("T");
+                            const [year, month, day] = datePart.split("-").map(Number);
+                            const [hours, minutes] = timePart.split(":").map(Number);
+                            
+                            // Create date object in local timezone
+                            const localDate = new Date(year, month - 1, day, hours, minutes);
+                            // Convert to ISO string (this will be the correct UTC representation)
+                            const scheduledAt = localDate.toISOString();
                             handleStepChange(index, { scheduledAt });
                           }
                         }}
-                        min={new Date().toISOString().slice(0, 16)}
+                        min={(() => {
+                          // Set min to current local time
+                          const now = new Date();
+                          const year = now.getFullYear();
+                          const month = String(now.getMonth() + 1).padStart(2, "0");
+                          const day = String(now.getDate()).padStart(2, "0");
+                          const hours = String(now.getHours()).padStart(2, "0");
+                          const minutes = String(now.getMinutes()).padStart(2, "0");
+                          return `${year}-${month}-${day}T${hours}:${minutes}`;
+                        })()}
                         style={{
                           padding: "8px 10px",
                           borderRadius: "8px",
