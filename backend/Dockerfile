@@ -55,8 +55,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --spider --quiet http://localhost:3000/health || exit 1
 
 # Use startup script that runs migrations then starts server
-# Use exec form with explicit shell to avoid Railway auto-detection issues
-ENTRYPOINT ["/bin/sh"]
-CMD ["./start.sh"]
+# Use absolute path in exec form to avoid Railway auto-detection issues
+CMD ["/bin/sh", "/app/start.sh"]
 
 
