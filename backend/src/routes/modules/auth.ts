@@ -43,20 +43,27 @@ const exchangeSchema = z.object({
 
 // GET callback route - Google redirects here after OAuth
 authRouter.get("/google/callback", (req, res) => {
-  const { code, state, error } = req.query;
+  const { code, state, error, source } = req.query;
   
-  // Detect if this is from extension:
-  // - Extension opens OAuth in a new tab directly (no referer or referer is from Google)
-  // - Webapp redirects from its own domain (has referer from webapp)
+  // Detect if this is from extension using multiple methods:
+  // 1. Explicit source=extension query parameter (most reliable)
+  // 2. Referer header analysis (fallback)
+  // 3. User-Agent patterns (additional check)
   const referer = req.get("Referer") || "";
   const userAgent = req.get("User-Agent") || "";
   
-  // Extension detection: 
-  // 1. No referer (direct navigation) OR referer is from Google (OAuth flow)
-  // 2. Not from webapp domain
+  // Check for explicit source parameter first
+  const hasExplicitSource = source === "extension";
+  
+  // Extension detection fallback logic:
+  // - Extension opens OAuth in a new tab directly (no referer or referer is from Google)
+  // - Webapp redirects from its own domain (has referer from webapp)
   const isFromGoogle = referer.includes("accounts.google.com") || referer.includes("google.com");
   const isFromWebapp = referer.includes("taskforce-webapp") || referer.includes("railway.app");
-  const isExtension = (isFromGoogle || !referer) && !isFromWebapp;
+  const isExtensionByReferer = (isFromGoogle || !referer) && !isFromWebapp;
+  
+  // Final determination: explicit source takes precedence, then referer analysis
+  const isExtension = hasExplicitSource || isExtensionByReferer;
   
   // If there's an error from Google
   if (error) {
@@ -90,33 +97,181 @@ authRouter.get("/google/callback", (req, res) => {
     return res.redirect(`${webappUrl}/auth/callback?error=${encodeURIComponent(error as string)}`);
   }
 
-  // If from extension, keep code/state in URL for extension to extract
-  // The extension monitors the tab URL and will extract code/state from it
-  // We'll serve a simple page that keeps the URL intact
+  // If from extension, serve callback page with script that communicates with extension
+  // The page includes the auth-callback script that sends code/state to background script
   if (isExtension) {
+    const codeParam = code ? encodeURIComponent(code as string) : "";
+    const stateParam = state ? encodeURIComponent(state as string) : "";
+    
     return res.send(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>TaskForce Authentication</title>
+        <meta charset="UTF-8">
         <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
-          .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #1a73e8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            text-align: center; 
+            padding: 40px; 
+            background: #f5f5f5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+          }
+          .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 400px;
+          }
+          .spinner { 
+            border: 3px solid #f3f3f3; 
+            border-top: 3px solid #1a73e8; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite; 
+            margin: 0 auto 20px; 
+          }
+          @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+          }
+          .error {
+            color: #d93025;
+            margin-top: 20px;
+          }
+          .success {
+            color: #188038;
+            margin-top: 20px;
+          }
+          #loading { display: block; }
+          #error { display: none; }
+          #success { display: none; }
         </style>
       </head>
       <body>
-        <div class="spinner"></div>
-        <p>Completing authentication...</p>
-        <p style="font-size: 12px; color: #666; margin-top: 20px;">This window will close automatically</p>
+        <div class="container">
+          <div id="loading">
+            <div class="spinner"></div>
+            <p>Completing authentication...</p>
+            <p style="font-size: 12px; color: #666; margin-top: 20px;">This window will close automatically</p>
+          </div>
+          <div id="error" class="error">
+            <p id="error-message"></p>
+          </div>
+          <div id="success" class="success">
+            <p>Authentication successful! This window will close automatically.</p>
+          </div>
+        </div>
         <script>
-          // Keep the URL with code/state so extension can extract it
-          // The extension monitors tab URLs and will detect this
-          // Wait a bit then try to close (extension will handle it)
-          setTimeout(function() {
-            // Extension should have detected by now, but if not, keep page open
-            console.log("Auth callback - code and state in URL for extension to extract");
-          }, 2000);
+          // Extract code and state from URL
+          const urlParams = new URLSearchParams(window.location.search);
+          const code = urlParams.get("code");
+          const state = urlParams.get("state");
+          const error = urlParams.get("error");
+          
+          const loadingEl = document.getElementById("loading");
+          const errorEl = document.getElementById("error");
+          const successEl = document.getElementById("success");
+          const errorMessageEl = document.getElementById("error-message");
+          
+          if (error) {
+            // Show error
+            if (loadingEl) loadingEl.style.display = "none";
+            if (errorEl) errorEl.style.display = "block";
+            if (errorMessageEl) {
+              errorMessageEl.textContent = "Authentication failed: " + decodeURIComponent(error);
+            }
+            
+            // Try to send error to extension
+            try {
+              if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+                chrome.runtime.sendMessage(
+                  chrome.runtime.id,
+                  {
+                    type: "AUTH_CALLBACK_ERROR",
+                    error: decodeURIComponent(error),
+                  },
+                  () => {
+                    // Close window after a delay
+                    setTimeout(() => {
+                      window.close();
+                    }, 3000);
+                  }
+                );
+              }
+            } catch (e) {
+              console.error("Failed to send error to extension:", e);
+              setTimeout(() => window.close(), 3000);
+            }
+          } else if (code && state) {
+            // Send code and state to background script
+            try {
+              if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+                chrome.runtime.sendMessage(
+                  chrome.runtime.id,
+                  {
+                    type: "AUTH_CALLBACK",
+                    code: code,
+                    state: state,
+                  },
+                  (response) => {
+                    if (chrome.runtime.lastError) {
+                      console.error("Error sending message:", chrome.runtime.lastError);
+                      if (loadingEl) loadingEl.style.display = "none";
+                      if (errorEl) errorEl.style.display = "block";
+                      if (errorMessageEl) {
+                        errorMessageEl.textContent = "Failed to communicate with extension. Please try again.";
+                      }
+                      return;
+                    }
+                    
+                    if (response && response.error) {
+                      // Show error from background
+                      if (loadingEl) loadingEl.style.display = "none";
+                      if (errorEl) errorEl.style.display = "block";
+                      if (errorMessageEl) {
+                        errorMessageEl.textContent = response.error;
+                      }
+                    } else {
+                      // Show success
+                      if (loadingEl) loadingEl.style.display = "none";
+                      if (successEl) successEl.style.display = "block";
+                      
+                      // Close window after a short delay
+                      setTimeout(() => {
+                        window.close();
+                      }, 2000);
+                    }
+                  }
+                );
+              } else {
+                // Fallback: if chrome.runtime is not available, keep page open for tab monitoring
+                console.log("Auth callback - code and state in URL for extension to extract");
+                console.log("Code:", code);
+                console.log("State:", state);
+              }
+            } catch (e) {
+              console.error("Failed to send message to extension:", e);
+              if (loadingEl) loadingEl.style.display = "none";
+              if (errorEl) errorEl.style.display = "block";
+              if (errorMessageEl) {
+                errorMessageEl.textContent = "Failed to communicate with extension. Please try again.";
+              }
+            }
+          } else {
+            // Missing parameters
+            if (loadingEl) loadingEl.style.display = "none";
+            if (errorEl) errorEl.style.display = "block";
+            if (errorMessageEl) {
+              errorMessageEl.textContent = "Missing authentication parameters. Please try again.";
+            }
+          }
         </script>
       </body>
       </html>

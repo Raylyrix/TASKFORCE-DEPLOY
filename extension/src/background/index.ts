@@ -25,13 +25,16 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Store pending auth state to match callback with request
 let pendingAuthState: { state: string; resolve: (value: AuthState) => void; reject: (error: Error) => void } | null = null;
+// Track if callback is already being processed to prevent duplicate handling
+let isProcessingCallback = false;
 
 const handleAuthStart = async (payload?: AuthStartPayload) => {
   const backendUrl = await getBackendUrl();
 
-  // Use backend's callback URL without query parameters
-  // Google requires exact match, so we can't include ?source=extension
-  // The backend will detect it's from extension by checking the tab URL
+  // Use backend's callback URL with source parameter for better detection
+  // Note: Google OAuth requires exact redirect URI match, so we can't add query params to redirectUri
+  // Instead, we'll add it to the OAuth URL after generation, or rely on referer detection
+  // The backend will detect it's from extension by checking referer and source parameter
   const redirectUri = `${backendUrl}/api/auth/google/callback`;
 
   const startResponse = await fetch(`${backendUrl}/api/auth/google/start`, {
@@ -68,65 +71,129 @@ const handleAuthStart = async (payload?: AuthStartPayload) => {
     },
     (tab) => {
       if (chrome.runtime.lastError || !tab || !tab.id) {
-        pendingAuthState = null;
+        if (pendingAuthState?.state === state) {
+          pendingAuthState.reject(new Error("Failed to open authentication tab"));
+          pendingAuthState = null;
+        }
         return;
       }
 
-      // Monitor tab for URL changes to detect callback
       const tabId = tab.id;
-      const checkTab = setInterval(() => {
-        chrome.tabs.get(tabId, (currentTab) => {
-          if (chrome.runtime.lastError || !currentTab) {
-            clearInterval(checkTab);
-            if (pendingAuthState?.state === state) {
-              pendingAuthState.reject(new Error("Authentication tab closed"));
-              pendingAuthState = null;
-            }
-            return;
-          }
+      let tabListener: ((updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo, updatedTab: chrome.tabs.Tab) => void) | null = null;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-          // Check if URL contains callback with code and state
-          // Check both backend callback and webapp callback (in case of redirect)
-          const tabUrl = currentTab.url || "";
-          if (tabUrl.includes("/api/auth/google/callback") || tabUrl.includes("/auth/callback")) {
+      // Use chrome.tabs.onUpdated listener for more efficient and reliable detection
+      tabListener = (updatedTabId, changeInfo, updatedTab) => {
+        // Only process updates for our auth tab
+        if (updatedTabId !== tabId) return;
+        
+        // Wait for the tab to finish loading
+        if (changeInfo.status !== "complete" || !updatedTab.url) return;
+
+        const tabUrl = updatedTab.url;
+        
+        // Check if URL contains callback with code and state
+        // Check both backend callback and webapp callback (in case of redirect)
+        if (tabUrl.includes("/api/auth/google/callback") || tabUrl.includes("/auth/callback")) {
+          try {
             const url = new URL(tabUrl);
             const callbackCode = url.searchParams.get("code");
             const callbackState = url.searchParams.get("state");
             const error = url.searchParams.get("error");
 
+            // Clean up listener and timeout
+            if (tabListener) {
+              chrome.tabs.onUpdated.removeListener(tabListener);
+              tabListener = null;
+            }
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+
             if (error) {
-              clearInterval(checkTab);
               if (pendingAuthState?.state === state) {
                 pendingAuthState.reject(new Error(decodeURIComponent(error)));
                 pendingAuthState = null;
               }
-              chrome.tabs.remove(tabId);
+              chrome.tabs.remove(tabId).catch(() => {
+                // Ignore errors if tab is already closed
+              });
               return;
             }
 
             // If we have code and state, and state matches, process it
-            // Even if redirected to webapp, we can still extract the code
-            if (callbackCode && callbackState && callbackState === state) {
-              clearInterval(checkTab);
-              // Close the tab
-              chrome.tabs.remove(tabId);
-              // Handle the callback
-              handleAuthCallback(callbackCode, callbackState).catch((err) => {
-                if (pendingAuthState?.state === state) {
-                  pendingAuthState.reject(err);
-                  pendingAuthState = null;
+            // But only if not already processing (message-based might have handled it first)
+            if (callbackCode && callbackState && callbackState === state && !isProcessingCallback) {
+              // Wait a moment for callback page script to send message first
+              // If message-based communication works, this won't process
+              // If not, this serves as fallback
+              setTimeout(() => {
+                if (!isProcessingCallback && pendingAuthState?.state === state) {
+                  // Close the tab
+                  chrome.tabs.remove(tabId).catch(() => {
+                    // Ignore errors if tab is already closed
+                  });
+                  
+                  // Handle the callback (tab monitoring fallback)
+                  handleAuthCallback(callbackCode, callbackState).catch((err) => {
+                    if (pendingAuthState?.state === state) {
+                      pendingAuthState.reject(err);
+                      pendingAuthState = null;
+                      isProcessingCallback = false;
+                    }
+                  });
+                } else if (isProcessingCallback) {
+                  // Message-based handled it, just close the tab
+                  chrome.tabs.remove(tabId).catch(() => {
+                    // Ignore errors if tab is already closed
+                  });
                 }
+              }, 500); // Give callback page script 500ms to send message
+            } else if (isProcessingCallback) {
+              // Callback already being processed via message, just close the tab
+              chrome.tabs.remove(tabId).catch(() => {
+                // Ignore errors if tab is already closed
               });
             }
+          } catch (err) {
+            console.error("Error processing auth callback:", err);
+            if (pendingAuthState?.state === state) {
+              pendingAuthState.reject(new Error("Failed to process authentication callback"));
+              pendingAuthState = null;
+            }
+            // Clean up
+            if (tabListener) {
+              chrome.tabs.onUpdated.removeListener(tabListener);
+              tabListener = null;
+            }
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
           }
-        });
-      }, 500);
+        }
+      };
+
+      // Set up the listener
+      chrome.tabs.onUpdated.addListener(tabListener);
 
       // Timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(checkTab);
+      timeoutId = setTimeout(() => {
+        if (tabListener) {
+          chrome.tabs.onUpdated.removeListener(tabListener);
+          tabListener = null;
+        }
+        if (pendingAuthState?.state === state) {
+          pendingAuthState.reject(new Error("Authentication timeout"));
+          pendingAuthState = null;
+        }
         chrome.tabs.get(tabId, (tab) => {
-          if (tab) chrome.tabs.remove(tabId);
+          if (tab) {
+            chrome.tabs.remove(tabId).catch(() => {
+              // Ignore errors if tab is already closed
+            });
+          }
         });
       }, 5 * 60 * 1000);
     }
@@ -138,10 +205,17 @@ const handleAuthStart = async (payload?: AuthStartPayload) => {
 
 // Handle auth callback from the callback page
 const handleAuthCallback = async (code: string, state: string) => {
+  // Prevent duplicate processing
+  if (isProcessingCallback) {
+    console.log("Callback already being processed, ignoring duplicate");
+    return;
+  }
+
   if (!pendingAuthState || pendingAuthState.state !== state) {
     throw new Error("Invalid or expired OAuth state");
   }
 
+  isProcessingCallback = true;
   const backendUrl = await getBackendUrl();
 
   try {
@@ -165,11 +239,13 @@ const handleAuthCallback = async (code: string, state: string) => {
     // Resolve the pending auth
     pendingAuthState.resolve(authState);
     pendingAuthState = null;
+    isProcessingCallback = false;
     
     return authState;
   } catch (error) {
     pendingAuthState.reject(error as Error);
     pendingAuthState = null;
+    isProcessingCallback = false;
     throw error;
   }
 };

@@ -30,7 +30,46 @@ function AuthCallbackContent() {
         }
 
         // Exchange code for tokens
-        const { user } = await api.auth.exchangeCode(code, state);
+        // Use direct backend URL to avoid Next.js rewrite issues (like extension does)
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://taskforce-backend-production.up.railway.app";
+        
+        // Add timeout wrapper to prevent hanging
+        const fetchWithTimeout = (url: string, config: RequestInit, timeoutMs: number): Promise<Response> => {
+          return Promise.race([
+            fetch(url, config),
+            new Promise<Response>((_, reject) =>
+              setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
+            ),
+          ]);
+        };
+
+        const exchangeResponse = await fetchWithTimeout(
+          `${backendUrl}/api/auth/google/exchange`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ code, state }),
+          },
+          30000 // 30 second timeout
+        );
+
+        if (!exchangeResponse.ok) {
+          const errorText = await exchangeResponse.text();
+          let errorMessage = errorText || `Authentication failed with status ${exchangeResponse.status}`;
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error) {
+              errorMessage = errorJson.error;
+            }
+          } catch {
+            // Not JSON, use text as-is
+          }
+          throw new Error(errorMessage);
+        }
+
+        const { user } = await exchangeResponse.json();
 
         // Store user info
         if (typeof window !== "undefined") {
