@@ -10,10 +10,11 @@ COPY backend/prisma ./prisma/
 # Install dependencies
 RUN npm ci
 
-# Copy source code from backend directory (includes start.sh)
+# Copy source code from backend directory
 COPY backend/ .
 
-# Ensure start.sh is executable
+# Explicitly copy start.sh (in case .dockerignore excludes it) and make it executable
+COPY backend/start.sh ./start.sh
 RUN chmod +x ./start.sh
 
 # Generate Prisma client
