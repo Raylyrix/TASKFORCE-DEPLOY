@@ -433,6 +433,17 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     },
   });
 
+  // Update campaign status to RUNNING if it's still SCHEDULED
+  await prisma.campaign.updateMany({
+    where: {
+      id: recipient.campaign.id,
+      status: CampaignStatus.SCHEDULED,
+    },
+    data: {
+      status: CampaignStatus.RUNNING,
+    },
+  });
+
   await scheduleFollowUpsForMessage(recipient.campaign.id, recipient.id, new Date());
 
   // Check if we should trigger campaign workflows (async, don't await)
@@ -451,6 +462,7 @@ const triggerCampaignWorkflows = async (campaignId: string) => {
             status: RecipientStatus.SENT,
           },
         },
+        sheetSource: true,
       },
     });
 
@@ -466,6 +478,91 @@ const triggerCampaignWorkflows = async (campaignId: string) => {
     const sentRecipients = campaign.recipients.length;
 
     if (sentRecipients > 0 && sentRecipients === totalRecipients) {
+      // Mark campaign as COMPLETED
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: CampaignStatus.COMPLETED,
+        },
+      });
+
+      logger.info({ campaignId }, "Campaign marked as COMPLETED");
+
+      // Update Google Sheet with campaign results if sheetSource exists
+      if (campaign.sheetSource) {
+        try {
+          const allRecipients = await prisma.campaignRecipient.findMany({
+            where: { campaignId },
+            include: {
+              messages: {
+                where: {
+                  followUpStepId: null, // Only original campaign messages
+                },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
+            },
+          });
+
+          const recipientsWithStatus = await Promise.all(
+            allRecipients.map(async (recipient) => {
+              const message = recipient.messages[0];
+              const hasBounce = message?.status === MessageStatus.BOUNCED;
+              const hasFailed = recipient.status === RecipientStatus.FAILED || message?.status === MessageStatus.FAILED;
+
+              // Get tracking events
+              const openedEvent = message
+                ? await prisma.trackingEvent.findFirst({
+                    where: {
+                      messageLogId: message.id,
+                      type: "OPEN",
+                    },
+                    orderBy: { createdAt: "asc" },
+                  })
+                : null;
+
+              const clickedEvent = message
+                ? await prisma.trackingEvent.findFirst({
+                    where: {
+                      messageLogId: message.id,
+                      type: "CLICK",
+                    },
+                    orderBy: { createdAt: "asc" },
+                  })
+                : null;
+
+              return {
+                email: recipient.email,
+                payload: recipient.payload as RecipientRecord,
+                status: recipient.status,
+                sentAt: message?.sendAt ?? null,
+                openedAt: openedEvent?.createdAt ?? null,
+                clickedAt: clickedEvent?.createdAt ?? null,
+                bounced: hasBounce,
+                failed: hasFailed,
+              };
+            }),
+          );
+
+          const { sheetsService } = await import("./googleSheets.js");
+          await sheetsService.updateSheetWithCampaignResults(
+            campaign.userId,
+            campaign.sheetSource.spreadsheetId,
+            campaign.sheetSource.worksheetId,
+            recipientsWithStatus,
+          );
+
+          logger.info({ campaignId, spreadsheetId: campaign.sheetSource.spreadsheetId }, "Updated Google Sheet with campaign results");
+        } catch (error) {
+          logger.error(
+            { error, campaignId },
+            "Failed to update Google Sheet with campaign results (non-fatal)",
+          );
+          // Don't throw - sheet update failure shouldn't break campaign completion
+        }
+      }
+
+      // Trigger workflow
       const { workflowTriggerService } = await import("./workflowTrigger.js");
       await workflowTriggerService.triggerCampaignSent(campaign.userId, {
         campaignId: campaign.id,

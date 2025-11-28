@@ -257,8 +257,232 @@ export const importSheetForUser = async (userId: string, input: SheetImportInput
   };
 };
 
+/**
+ * Update Google Sheet with campaign results
+ * Adds status columns (Email Status, Sent At, Opened, Clicked, Bounced, Failed) to the sheet
+ */
+export const updateSheetWithCampaignResults = async (
+  userId: string,
+  spreadsheetId: string,
+  worksheetId: string | null,
+  recipients: Array<{
+    email: string;
+    payload: Record<string, string>;
+    status: string;
+    sentAt: Date | null;
+    openedAt: Date | null;
+    clickedAt: Date | null;
+    bounced: boolean;
+    failed: boolean;
+  }>,
+) => {
+  try {
+    const authClient = await googleAuthService.getAuthorizedClientForUser(userId);
+    const sheets = google.sheets({
+      version: "v4",
+      auth: authClient,
+    });
+
+    // Get spreadsheet metadata to find worksheet
+    const metadata = await sheets.spreadsheets.get({
+      spreadsheetId,
+      includeGridData: false,
+    });
+
+    const targetSheet = worksheetId
+      ? metadata.data.sheets?.find((sheet) => sheet.properties?.sheetId?.toString() === worksheetId)
+      : metadata.data.sheets?.[0];
+
+    if (!targetSheet?.properties?.title) {
+      throw new Error("Unable to locate worksheet in spreadsheet");
+    }
+
+    const worksheetTitle = targetSheet.properties.title;
+    const range = `'${worksheetTitle}'`;
+
+    // Get current sheet data to find email column and row positions
+    const valuesResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+
+    const rows = valuesResponse.data.values ?? [];
+    if (rows.length === 0) {
+      logger.warn({ spreadsheetId, worksheetTitle }, "Sheet is empty, cannot update");
+      return;
+    }
+
+    const headerRow = rows[0] ?? [];
+    const emailColumnIndex = headerRow.findIndex((h: string) => 
+      h && (h.toLowerCase().includes("email") || h.toLowerCase().includes("e-mail"))
+    );
+
+    if (emailColumnIndex === -1) {
+      logger.warn({ spreadsheetId, worksheetTitle }, "Email column not found in sheet");
+      return;
+    }
+
+    // Find or create status columns
+    const statusColumns = [
+      "Email Status",
+      "Sent At",
+      "Opened",
+      "Clicked",
+      "Bounced",
+      "Failed",
+    ];
+
+    const existingHeaders = headerRow.map((h: string) => (h || "").trim());
+    const newHeaders: string[] = [];
+    const statusColumnIndices: number[] = [];
+
+    statusColumns.forEach((colName) => {
+      const existingIndex = existingHeaders.findIndex((h) => h === colName);
+      if (existingIndex !== -1) {
+        statusColumnIndices.push(existingIndex);
+      } else {
+        // Column doesn't exist, will add it
+        statusColumnIndices.push(headerRow.length + newHeaders.length);
+        newHeaders.push(colName);
+      }
+    });
+
+    // Add new columns if needed
+    if (newHeaders.length > 0) {
+      const lastColumn = String.fromCharCode(65 + headerRow.length - 1); // A, B, C, etc.
+      const newColumnStart = String.fromCharCode(65 + headerRow.length);
+      const newColumnEnd = String.fromCharCode(65 + headerRow.length + newHeaders.length - 1);
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${worksheetTitle}'!${newColumnStart}1:${newColumnEnd}1`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [newHeaders],
+        },
+      });
+
+      logger.info(
+        { spreadsheetId, worksheetTitle, newHeaders },
+        "Added status columns to sheet",
+      );
+    }
+
+    // Build update data: map email to row index
+    const emailToRowIndex = new Map<string, number>();
+    rows.slice(1).forEach((row: string[], index: number) => {
+      const email = row[emailColumnIndex]?.trim().toLowerCase();
+      if (email) {
+        emailToRowIndex.set(email, index + 2); // +2 because: 1-indexed and header row
+      }
+    });
+
+    // Prepare batch updates
+    const updates: Array<{
+      range: string;
+      values: string[][];
+    }> = [];
+
+    recipients.forEach((recipient) => {
+      const email = recipient.email.toLowerCase();
+      const rowIndex = emailToRowIndex.get(email);
+
+      if (!rowIndex) {
+        logger.warn({ email, spreadsheetId }, "Recipient email not found in sheet");
+        return;
+      }
+
+      const statusValue = recipient.failed
+        ? "Failed"
+        : recipient.bounced
+          ? "Bounced"
+          : recipient.status === "SENT"
+            ? "Sent"
+            : recipient.status === "PENDING"
+              ? "Pending"
+              : recipient.status;
+
+      const sentAtValue = recipient.sentAt
+        ? recipient.sentAt.toISOString().split("T")[0] + " " + recipient.sentAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+        : "";
+
+      const openedValue = recipient.openedAt ? "Yes" : "No";
+      const clickedValue = recipient.clickedAt ? "Yes" : "No";
+      const bouncedValue = recipient.bounced ? "Yes" : "No";
+      const failedValue = recipient.failed ? "Yes" : "No";
+
+      // Convert column index to letter (A=0, B=1, ..., Z=25, AA=26, etc.)
+      const colToLetter = (col: number) => {
+        let result = "";
+        let num = col;
+        while (num >= 0) {
+          result = String.fromCharCode(65 + (num % 26)) + result;
+          num = Math.floor(num / 26) - 1;
+        }
+        return result;
+      };
+
+      statusColumnIndices.forEach((colIndex, statusIndex) => {
+        const colLetter = colToLetter(colIndex);
+        const range = `'${worksheetTitle}'!${colLetter}${rowIndex}`;
+        const value = [
+          statusValue,
+          sentAtValue,
+          openedValue,
+          clickedValue,
+          bouncedValue,
+          failedValue,
+        ][statusIndex];
+
+        updates.push({
+          range,
+          values: [[value]],
+        });
+      });
+    });
+
+    // Batch update all cells
+    if (updates.length > 0) {
+      // Group updates by range to use batchUpdate
+      const batchUpdates = updates.map((update) => ({
+        range: update.range,
+        values: update.values,
+      }));
+
+      // Use batchUpdate for efficiency
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: "RAW",
+          data: batchUpdates,
+        },
+      });
+
+      logger.info(
+        {
+          spreadsheetId,
+          worksheetTitle,
+          updatedRows: updates.length / statusColumnIndices.length,
+        },
+        "Updated sheet with campaign results",
+      );
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        spreadsheetId,
+        worksheetId,
+      },
+      "Failed to update sheet with campaign results",
+    );
+    // Don't throw - sheet update failure shouldn't break campaign completion
+  }
+};
+
 export const sheetsService = {
   importSheetForUser,
+  updateSheetWithCampaignResults,
 };
 
 
