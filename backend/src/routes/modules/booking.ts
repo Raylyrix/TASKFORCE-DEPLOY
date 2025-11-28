@@ -1,5 +1,5 @@
 import { addMinutes } from "date-fns";
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 
 import { prisma } from "../../lib/prisma";
@@ -34,77 +34,8 @@ const reminderRequestSchema = z.object({
     .optional(),
 });
 
-// JSON API endpoint for React booking page
-bookingRouter.get("/book/:token/data", async (req, res, next) => {
-  try {
-    const { token } = req.params;
-
-    const bookingLink = await prisma.bookingLink.findUnique({
-      where: { token },
-      include: {
-        meetingType: {
-          include: {
-            user: true,
-            calendarConnection: true,
-          },
-        },
-      },
-    });
-
-    if (!bookingLink || !bookingLink.meetingType) {
-      res.status(404).json({ error: "Booking link not found" });
-      return;
-    }
-
-    const meetingType = bookingLink.meetingType;
-    const host = meetingType.user;
-    const timeZone = meetingType.calendarConnection?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    if (!meetingType.calendarConnection) {
-      res.status(400).json({ error: "Calendar connection required" });
-      return;
-    }
-
-    const availabilityResponse = await calendarAvailabilityService.getAvailability({
-      userId: meetingType.userId,
-      start: new Date().toISOString(),
-      end: addMinutes(new Date(), 14 * 24 * 60).toISOString(),
-      meetingTypeId: meetingType.id,
-    });
-
-    const recommendations = computeSmartRecommendations(
-      availabilityResponse.availability,
-      meetingType.durationMinutes,
-      timeZone,
-    );
-
-    res.status(200).json({
-      meeting: {
-        name: meetingType.name,
-        description: meetingType.description,
-        durationMinutes: meetingType.durationMinutes,
-        locationType: meetingType.meetingLocationType,
-        locationValue: meetingType.meetingLocationValue,
-        timeZone,
-      },
-      host: {
-        name: host?.displayName ?? meetingType.name,
-        email: host?.email ?? "",
-      },
-      availability: availabilityResponse.availability,
-      recommendations: recommendations.map((rec) => ({
-        start: rec.start,
-        end: rec.end,
-        score: rec.score,
-      })),
-      metadata: availabilityResponse.metadata,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-bookingRouter.get("/book/:token", async (req, res, next) => {
+// Export the handler function so it can be reused
+export const handleBookingPage = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { token } = req.params;
     const namePrefill = typeof req.query.name === "string" ? req.query.name : "";
@@ -324,99 +255,92 @@ bookingRouter.get("/book/:token", async (req, res, next) => {
         gap: 12px;
       }
       .slot-choice {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
+        border: 2px solid #cbd5f5;
+        border-radius: 12px;
         padding: 16px;
-        border-radius: 14px;
-        border: 1px solid #cbd5f5;
         background: #ffffff;
         cursor: pointer;
-        transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        transition: all 0.2s ease;
         text-align: left;
       }
       .slot-choice:hover {
         border-color: #6366f1;
-        box-shadow: 0 12px 24px rgba(99, 102, 241, 0.15);
-        transform: translateY(-1px);
-      }
-      .slot-choice.active {
-        border-color: #4f46e5;
         background: #eef2ff;
-        box-shadow: 0 16px 32px rgba(79, 70, 229, 0.2);
       }
-      .slot-choice-time {
-        font-weight: 600;
-        color: #312e81;
+      .slot-choice.selected {
+        border-color: #6366f1;
+        background: #eef2ff;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
       }
-      .slot-choice-label {
-        font-size: 14px;
-        color: #4338ca;
+      .slot-choice strong {
+        display: block;
+        color: #0f172a;
+        margin-bottom: 4px;
       }
-      .slot-choice-reason {
-        font-size: 13px;
-        color: #475569;
-      }
-      .cta-row {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 12px;
-      }
-      .cta-row .cta-hint {
-        font-size: 13px;
+      .slot-choice span {
         color: #64748b;
+        font-size: 14px;
       }
-      .availability-grid {
-        display: grid;
-        gap: 12px;
-      }
-      .feedback-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-      .feedback-button {
-        flex: 1 1 220px;
-        padding: 14px 16px;
+      .cta-button {
+        background: #6366f1;
+        color: #ffffff;
+        border: none;
         border-radius: 12px;
-        border: 1px solid #cbd5f5;
-        background: #ffffff;
-        color: #334155;
+        padding: 14px 24px;
+        font-size: 16px;
         font-weight: 600;
         cursor: pointer;
-        transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-        text-align: left;
+        transition: all 0.2s ease;
+        width: 100%;
+        margin-top: 16px;
+      }
+      .cta-button:hover:not(:disabled) {
+        background: #4f46e5;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      }
+      .cta-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .feedback-section {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid #e2e8f0;
+      }
+      .feedback-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .feedback-button {
+        background: #f1f5f9;
+        border: 1px solid #cbd5f5;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
       }
       .feedback-button:hover {
-        border-color: #6366f1;
-        box-shadow: 0 10px 24px rgba(99, 102, 241, 0.18);
-        transform: translateY(-1px);
+        background: #e2e8f0;
+        border-color: #94a3b8;
       }
-      .feedback-button.secondary {
-        background: #eef2ff;
-        border-color: #cbd5f5;
+      .status-message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 12px;
+        font-size: 14px;
       }
-      .small-print {
-        font-size: 12px;
-        color: #64748b;
-        margin-top: 10px;
+      .status-message.success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
       }
-      footer {
-        padding: 24px 32px;
-        font-size: 12px;
-        color: #64748b;
-        text-align: center;
-        background: #f8fafc;
-      }
-      @media (max-width: 600px) {
-        header, .content, footer {
-          padding: 24px;
-        }
-        header h1 {
-          font-size: 24px;
-        }
+      .status-message.error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
       }
     </style>
   </head>
@@ -424,235 +348,124 @@ bookingRouter.get("/book/:token", async (req, res, next) => {
     <div class="card">
       <header>
         <h1>${escapeHtml(meetingType.name)}</h1>
-        <p>Hosted by ${escapeHtml(host?.displayName ?? host?.email ?? "your host")}</p>
-        <p>${escapeHtml(meetingType.description ?? "")}</p>
+        ${meetingType.description ? `<p>${escapeHtml(meetingType.description)}</p>` : ""}
+        <p class="section-support">Duration: ${meetingType.durationMinutes} minutes</p>
       </header>
       <div class="content">
-        <section class="section">
-          <h2>Confirm your details</h2>
-          <form class="form-row" id="booking-form">
-            <label>
-              Name
-              <input type="text" id="guest-name" name="name" placeholder="Your full name" value="${escapeHtml(namePrefill)}" />
-            </label>
-            <label>
-              Email
-              <input type="email" id="guest-email" name="email" placeholder="you@example.com" value="${escapeHtml(emailPrefill)}" />
-            </label>
-            <label>
-              Agenda (optional)
-              <textarea id="guest-notes" name="notes" placeholder="Share anything you'd like us to know before we meet." rows="3"></textarea>
-            </label>
-          </form>
-        </section>
-        <section class="section" id="recommendation">
-          <h2>Recommended times</h2>
-          ${needsSync || availabilityMessage ? `
-            <div style="padding: 16px; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 12px; margin-bottom: 16px;">
-              <p style="margin: 0; color: #92400e; font-size: 14px;">
-                <strong>⚠️ Calendar sync needed:</strong> ${escapeHtml(availabilityMessage || "The host needs to sync their calendar to show available times.")}
-              </p>
-            </div>
-          ` : `
-            <p class="section-support">We analyzed the host calendar to surface high-confidence openings.</p>
-          `}
-          <div class="slot-card" id="top-recommendation">
-            <strong id="recommended-slot">${escapeHtml(suggestedSlotDisplay)}</strong>
-            <span id="recommended-details">${meetingType.durationMinutes} minute meeting • ${escapeHtml(timeZone ?? "Local time")}</span>
-            <span id="recommended-note" class="slot-choice-reason"></span>
+        <div class="section">
+          <h2>Select a time</h2>
+          ${needsSync ? `<p class="section-support">${availabilityMessage || "Syncing calendar availability..."}</p>` : ""}
+          <div class="recommendations-grid" id="recommendations">
+            ${recommendations.length > 0
+              ? recommendations
+                  .slice(0, 6)
+                  .map(
+                    (rec) => `
+              <button class="slot-choice" data-start="${rec.start}" data-end="${rec.end}">
+                <strong>${formatSlotRange(rec.start, rec.end, timeZone)}</strong>
+                <span>Recommended time</span>
+              </button>
+            `,
+                  )
+                  .join("")
+              : `<p class="section-support">No available times found. Please use the feedback options below to propose alternative times.</p>`}
           </div>
-          <div class="recommendations-grid" id="recommendation-options">
-            <span>Loading suggestions…</span>
+        </div>
+        <div class="section">
+          <h2>Your information</h2>
+          <div class="form-row">
+            <label for="guest-email">Email <span style="color: #dc2626;">*</span></label>
+            <input type="email" id="guest-email" placeholder="your.email@example.com" value="${escapeHtml(emailPrefill)}" required />
           </div>
-          <div class="cta-row">
-            <button class="cta-button" id="accept-slot">Book selected time</button>
-            <span class="cta-hint" id="selected-slot-copy"></span>
+          <div class="form-row">
+            <label for="guest-name">Name</label>
+            <input type="text" id="guest-name" placeholder="Your name" value="${escapeHtml(namePrefill)}" />
           </div>
-        </section>
-        <section class="section">
-          <h2>Pick another time</h2>
-          ${needsSync ? `
-            <div style="padding: 20px; text-align: center; color: #64748b;">
-              <p>Calendar availability will be shown once the host syncs their calendar.</p>
-              <p style="font-size: 13px; margin-top: 8px;">Please contact the host or try again later.</p>
-            </div>
-          ` : `
-            <div class="availability-grid" id="availability-grid">
-              <span>Loading availability…</span>
-            </div>
-          `}
-        </section>
-        <section class="section" id="alternatives">
-          <h2>Need something else?</h2>
-          <p class="section-support">Let us know what works better and we 'll coordinate with the host.</p>
-          <div class="feedback-grid">
-            <button class="feedback-button" id="feedback-propose">Propose different times</button>
-            <button class="feedback-button secondary" id="feedback-notify">Notify me when new slots open</button>
-            <button class="feedback-button" id="feedback-message">Message the host</button>
+          <div class="form-row">
+            <label for="guest-notes">Additional notes (optional)</label>
+            <textarea id="guest-notes" rows="3" placeholder="Any additional information..."></textarea>
           </div>
-          <p class="small-print" id="feedback-status"></p>
-        </section>
-        <section class="section">
-          <h2>Meeting location</h2>
-          <p>${escapeHtml(meetingType.meetingLocationType === "GOOGLE_MEET" ? "Google Meet link will be provided once booked." : meetingType.meetingLocationValue ?? "Confirmed after booking.")}</p>
-        </section>
+          <button class="cta-button" id="accept-button">Book selected time</button>
+          <div id="status-message"></div>
+        </div>
+        <div class="feedback-section">
+          <h2 style="font-size: 16px; margin: 0 0 12px; color: #475569;">Can't find a time that works?</h2>
+          <div class="feedback-buttons">
+            <button class="feedback-button" id="feedback-notify">Notify me when new times appear</button>
+            <button class="feedback-button" id="feedback-propose">Propose alternative times</button>
+          </div>
+          <div id="feedback-status"></div>
+        </div>
       </div>
-      <footer>
-        Need a different time? Reply to the invitation email and we’ll make it work.
-      </footer>
     </div>
     <script>
-      window.BOOKING_DATA = ${availabilityPayload};
-      const data = window.BOOKING_DATA || {};
-      const grid = document.getElementById("availability-grid");
-      const highlightSlot = document.getElementById("recommended-slot");
-      const highlightMeta = document.getElementById("recommended-details");
-      const highlightNote = document.getElementById("recommended-note");
-      const recommendationOptions = document.getElementById("recommendation-options");
-      const selectionCopy = document.getElementById("selected-slot-copy");
-      const acceptButton = document.getElementById("accept-slot");
-      const feedbackStatus = document.getElementById("feedback-status");
-      const emailInput = document.getElementById("guest-email");
-      const nameInput = document.getElementById("guest-name");
-      const reminderEndpoint = window.location.pathname.replace(/\/$/, "") + "/reminders";
-
-      const escapeHtmlClient = (value) => {
-        if (typeof value !== "string") return "";
-        return value
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
-      };
-
-      const formatSlot = (startIso, endIso) => {
-        if (!startIso || !endIso) return "";
-        const options = {
-          weekday: "short",
-          month: "long",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        };
-        if (data.meeting?.timeZone) {
-          options.timeZone = data.meeting.timeZone;
-        }
-        const formatter = new Intl.DateTimeFormat(undefined, options);
-        const startLabel = formatter.format(new Date(startIso));
-        const endLabel = formatter.format(new Date(endIso));
-        return startLabel + " – " + endLabel;
-      };
-
+      const availabilityData = ${availabilityPayload};
       let selectedRecommendation = null;
+      const recommendationsGrid = document.getElementById('recommendations');
+      const acceptButton = document.getElementById('accept-button');
+      const emailInput = document.getElementById('guest-email');
+      const nameInput = document.getElementById('guest-name');
+      const statusMessage = document.getElementById('status-message');
+      const feedbackStatus = document.getElementById('feedback-status');
 
-      const updateSelectionCopy = () => {
-        if (!selectionCopy) return;
-        if (!selectedRecommendation) {
-          selectionCopy.textContent = "Select a suggested slot or browse other availability below.";
-          return;
+      document.querySelectorAll('.slot-choice').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('.slot-choice').forEach((b) => b.classList.remove('selected'));
+          button.classList.add('selected');
+          selectedRecommendation = {
+            start: button.dataset.start,
+            end: button.dataset.end,
+          };
+        });
+      });
+
+      const sendReminderRequest = async (reason, note) => {
+        const emailValue = emailInput?.value?.trim();
+        if (!emailValue) {
+          alert('Please enter your email address first.');
+          emailInput?.focus();
+          return { ok: false };
         }
-        const slotSummary = formatSlot(selectedRecommendation.start, selectedRecommendation.end);
-        selectionCopy.textContent = "Selected: " + slotSummary + " • " + (selectedRecommendation.label || "Smart suggestion");
+        const nameValue = nameInput?.value?.trim() || '';
+        const response = await fetch(window.location.pathname.replace(/\\/$/, "") + "/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: emailValue,
+            name: nameValue || undefined,
+            reason,
+            note: note || undefined,
+            selectedSlot: selectedRecommendation || undefined,
+          }),
+        });
+        return response;
       };
 
-      const applyHighlight = () => {
-        if (selectedRecommendation && highlightSlot) {
-          highlightSlot.textContent = formatSlot(selectedRecommendation.start, selectedRecommendation.end);
-        } else if (data.meeting?.suggestedSlot && highlightSlot) {
-          highlightSlot.textContent = data.meeting.suggestedSlot;
-        }
-        if (highlightMeta) {
-          const duration = data.meeting?.durationMinutes
-            ? data.meeting.durationMinutes + " minute meeting"
-            : "";
-          const tz = data.meeting?.timeZone || "Local time";
-          highlightMeta.textContent = duration ? duration + " • " + tz : tz;
-        }
-        if (highlightNote) {
-          if (selectedRecommendation) {
-            const labelText = selectedRecommendation.label || "";
-            const descriptorText = selectedRecommendation.descriptor || "";
-            highlightNote.textContent = labelText && descriptorText
-              ? labelText + " • " + descriptorText
-              : labelText || descriptorText;
-          } else {
-            highlightNote.textContent = "";
+      document.getElementById('feedback-notify')?.addEventListener('click', async () => {
+        const result = await sendReminderRequest('notify');
+        if (result.ok) {
+          if (feedbackStatus) {
+            feedbackStatus.innerHTML = '<div class="status-message success">Got it! We\\'ll notify you when new times appear.</div>';
+          }
+        } else {
+          if (feedbackStatus) {
+            feedbackStatus.innerHTML = '<div class="status-message error">Failed to register notification. Please try again.</div>';
           }
         }
-      };
+      });
 
-      if (recommendationOptions) {
-        if (Array.isArray(data.recommendations) && data.recommendations.length) {
-          selectedRecommendation = data.recommendations[0];
-          applyHighlight();
-          updateSelectionCopy();
-          recommendationOptions.innerHTML = data.recommendations
-            .map((rec, index) => {
-              const slotText = formatSlot(rec.start, rec.end);
-              return (
-                '<button type="button" class="slot-choice' +
-                (index === 0 ? " active" : "") +
-                '" data-index="' + index + '">' +
-                '<span class="slot-choice-time">' + escapeHtmlClient(slotText) + "</span>" +
-                '<span class="slot-choice-label">' + escapeHtmlClient(rec.label || "") + "</span>" +
-                '<span class="slot-choice-reason">' + escapeHtmlClient(rec.descriptor || "") + "</span>" +
-                "</button>"
-              );
-            })
-            .join("");
-          recommendationOptions.querySelectorAll(".slot-choice").forEach((button) => {
-            button.addEventListener("click", () => {
-              const index = Number.parseInt(button.getAttribute("data-index"), 10);
-              if (Number.isNaN(index) || !data.recommendations[index]) {
-                return;
-              }
-              selectedRecommendation = data.recommendations[index];
-              recommendationOptions.querySelectorAll(".slot-choice").forEach((b) => b.classList.remove("active"));
-              button.classList.add("active");
-              applyHighlight();
-              updateSelectionCopy();
-            });
-          });
-        } else {
-          applyHighlight();
-          updateSelectionCopy();
-          recommendationOptions.innerHTML = '<span>No smart suggestions yet. Pick a time below that works best for you.</span>';
+      document.getElementById('feedback-propose')?.addEventListener('click', async () => {
+        const proposal = prompt('Share a few windows that work for you, and we\\'ll relay them to the host:');
+        if (feedbackStatus) {
+          if (proposal) {
+            const result = await sendReminderRequest('propose', proposal);
+            if (result.ok) {
+              feedbackStatus.innerHTML = '<div class="status-message success">Got it! We\\'ll relay your proposed times to the host.</div>';
+            } else {
+              feedbackStatus.innerHTML = '<div class="status-message error">Failed to send proposal. Please try again.</div>';
+            }
+          }
         }
-      } else {
-        applyHighlight();
-        updateSelectionCopy();
-      }
-
-      const availability = data.availability || [];
-      if (grid) {
-        if (!availability.length) {
-          grid.innerHTML = '<span>No slots available yet. We\'ll notify you when new times appear.</span>';
-        } else {
-          grid.innerHTML = availability.slice(0, 6)
-            .map((day) => {
-              const busySlots = (day.slots || [])
-                .filter((slot) => slot.status === "busy")
-                .map((slot) => {
-                  const start = new Date(slot.start);
-                  const end = new Date(slot.end);
-                  return '<li>' + start.toLocaleString() + ' – ' + end.toLocaleTimeString() + '</li>';
-                })
-                .join('');
-              const dateLabel = new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric' });
-              const slotContent = busySlots
-                ? '<ul>' + busySlots + '</ul>'
-                : '<span>Looks free! Choose a time that works for you.</span>';
-              return '<div class="slot-card"><strong>' + dateLabel + '</strong>' + slotContent + '<button class="cta-button" data-day="' + day.date + '">View times</button></div>';
-            })
-            .join('');
-        }
-      }
-
-      document.querySelectorAll('.cta-button[data-day]').forEach((button) => {
-        button.addEventListener('click', () => {
-          alert('Interactive slot picker coming soon! For now, reply to the invite with preferred times.');
-        });
       });
 
       acceptButton?.addEventListener('click', async (event) => {
@@ -676,7 +489,7 @@ bookingRouter.get("/book/:token", async (req, res, next) => {
         }
         
         try {
-          const bookingEndpoint = window.location.pathname.replace(/\/$/, "") + "/bookings";
+          const bookingEndpoint = window.location.pathname.replace(/\\/$/, "") + "/bookings";
           const response = await fetch(bookingEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -725,83 +538,94 @@ bookingRouter.get("/book/:token", async (req, res, next) => {
         }
       });
 
-      document.getElementById('feedback-propose')?.addEventListener('click', async () => {
-        const proposal = prompt('Share a few windows that work for you, and we\'ll relay them to the host:');
-        if (feedbackStatus) {
-          if (proposal) {
-            const result = await sendReminderRequest('propose', proposal);
-            if (result.ok) {
-              feedbackStatus.textContent = 'Got it! We\'ll nudge the host with your preferred times.';
-            }
-          } else {
-            feedbackStatus.textContent = 'No worries—feel free to suggest times whenever you\'re ready.';
-          }
-        }
-      });
-      document.getElementById('feedback-notify')?.addEventListener('click', async () => {
-        const result = await sendReminderRequest('notify');
-        if (feedbackStatus && result.ok) {
-          feedbackStatus.textContent = 'All set! We\'ll email you as soon as new slots open up.';
-        }
-      });
-      document.getElementById('feedback-message')?.addEventListener('click', () => {
-        void sendReminderRequest('manual');
-        const hostEmail = data.host?.email;
-        if (hostEmail) {
-          window.location.href = 'mailto:' + hostEmail + '?subject=Scheduling%20Question&body=Hi%20there%2C%0A%0A';
-          if (feedbackStatus) {
-            feedbackStatus.textContent = 'Opening an email draft so you can message the host directly.';
-          }
-        } else if (feedbackStatus) {
-          feedbackStatus.textContent = 'Reply to the invitation email and we\'ll coordinate the rest.';
-        }
-      });
-
-      const sendReminderRequest = async (reason, note) => {
-        const emailValue = emailInput?.value?.trim();
-        if (!emailValue) {
-          if (feedbackStatus) {
-            feedbackStatus.textContent = "Add your email so we can follow up with new times.";
-          }
-          emailInput?.focus();
-          return { ok: false };
-        }
-        const payload = {
-          email: emailValue,
-          name: nameInput?.value?.trim() || undefined,
-          reason,
-          note: note || undefined,
-          selectedSlot: selectedRecommendation
-            ? { start: selectedRecommendation.start, end: selectedRecommendation.end }
-            : undefined,
-        };
-        try {
-          const response = await fetch(reminderEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          if (!response.ok) {
-            throw new Error("Request failed");
-          }
-          return { ok: true };
-        } catch (error) {
-          if (feedbackStatus) {
-            feedbackStatus.textContent = 'We couldn\'t save your reminder just now. Try again in a moment.';
-          }
-          return { ok: false, error };
-        }
+      const formatSlot = (start, end) => {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        return startDate.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + 
+               ' - ' + endDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
       };
     </script>
   </body>
 </html>`;
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(html);
+  res.send(html);
   } catch (error) {
     next(error);
   }
-});
+};
+
+// JSON API endpoint for React booking page
+bookingRouter.get("/book/:token/data", async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const bookingLink = await prisma.bookingLink.findUnique({
+      where: { token },
+      include: {
+        meetingType: {
+          include: {
+            user: true,
+            calendarConnection: true,
+          },
+        },
+      },
+    });
+
+    if (!bookingLink || !bookingLink.meetingType) {
+      res.status(404).json({ error: "Booking link not found" });
+      return;
+    }
+
+    const meetingType = bookingLink.meetingType;
+    const host = meetingType.user;
+    const timeZone = meetingType.calendarConnection?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    if (!meetingType.calendarConnection) {
+      res.status(400).json({ error: "Calendar connection required" });
+      return;
+    }
+
+    const availabilityResponse = await calendarAvailabilityService.getAvailability({
+      userId: meetingType.userId,
+      start: new Date().toISOString(),
+      end: addMinutes(new Date(), 14 * 24 * 60).toISOString(),
+      meetingTypeId: meetingType.id,
+    });
+
+    const recommendations = computeSmartRecommendations(
+      availabilityResponse.availability,
+      meetingType.durationMinutes,
+      timeZone,
+    );
+
+    res.status(200).json({
+      meeting: {
+        name: meetingType.name,
+        description: meetingType.description,
+        durationMinutes: meetingType.durationMinutes,
+        locationType: meetingType.meetingLocationType,
+        locationValue: meetingType.meetingLocationValue,
+        timeZone,
+      },
+      host: {
+        name: host?.displayName ?? meetingType.name,
+        email: host?.email ?? "",
+      },
+      availability: availabilityResponse.availability,
+      recommendations: recommendations.map((rec) => ({
+        start: rec.start,
+        end: rec.end,
+        score: rec.score,
+      })),
+      metadata: availabilityResponse.metadata,
+    });
+  } catch (error) {
+    next(error);
+  }
+  });
+
+// Note: handleBookingPage is exported and used in app.ts for the public route at /book/:token
+// The bookingRouter routes below are mounted at /api, so they use /api/book/:token
 
 const bookingRequestSchema = z.object({
   email: z.string().email("Provide a valid email so we can reach you."),

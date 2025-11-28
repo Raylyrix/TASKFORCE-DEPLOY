@@ -78,6 +78,17 @@ export const createApp = () => {
 
   app.use("/api", router);
 
+  // Public booking page route (without /api prefix for direct access)
+  // This allows users to access booking pages at /book/:token
+  app.get("/book/:token", async (req, res, next) => {
+    try {
+      const { handleBookingPage } = await import("./routes/modules/booking.js");
+      await handleBookingPage(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Health check endpoints
   app.get("/health", healthCheck);
   app.get("/ready", readinessCheck);

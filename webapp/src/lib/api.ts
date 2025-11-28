@@ -758,7 +758,7 @@ export const api = {
           needsSync?: boolean;
           message?: string;
         };
-      }>(`/api/bookings/book/${token}/data`),
+      }>(`/api/book/${token}/data`),
     createBooking: (token: string, data: {
       email: string;
       name?: string;
@@ -774,7 +774,7 @@ export const api = {
           status: string;
           conferenceUrl: string | null;
         };
-      }>(`/api/bookings/book/${token}/bookings`, {
+      }>(`/api/book/${token}/bookings`, {
         method: "POST",
         body: data,
       }),
