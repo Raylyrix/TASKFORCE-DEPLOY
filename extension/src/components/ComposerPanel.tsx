@@ -666,12 +666,14 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
   };
 
   const handleCloseLaunchMonitor = () => {
-    if (launchMonitor.status === "running") {
-      return;
-    }
+    // Allow closing even when campaign is running - campaign continues in background
+    // Stop monitoring interval to avoid unnecessary API calls, but campaign keeps running on backend
     clearMonitorInterval();
-    launchFinalizedRef.current = false;
-    setLaunchMonitor(createInitialLaunchMonitor());
+    // Just close the modal - don't reset everything so campaign can continue
+    setLaunchMonitor((prev) => ({
+      ...prev,
+      open: false,
+    }));
   };
 
   const launchInFlight = launchMonitor.open && launchMonitor.status === "running";
@@ -685,7 +687,8 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
   );
   const launchLocked =
     launchMonitor.open && (launchMonitor.status === "running" || launchMonitor.status === "paused");
-  const canCloseLaunchMonitor = launchMonitor.status !== "running";
+  // Allow closing the modal at any time - campaign continues in background
+  const canCloseLaunchMonitor = true;
 
   const recipientsCount = importResult?.records.length ?? 0;
   const mergeFields = useMemo(() => {
