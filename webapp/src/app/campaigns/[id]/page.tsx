@@ -192,8 +192,7 @@ export default function CampaignDetailsPage() {
             </h2>
             <button
               onClick={() => {
-                // TODO: Open follow-up creation modal
-                alert("Follow-up creation will be added. For now, create follow-ups from the campaign composer.");
+                setShowFollowUpModal(true);
               }}
               className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
             >
