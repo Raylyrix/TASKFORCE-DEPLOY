@@ -286,6 +286,7 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showBestPractices, setShowBestPractices] = useState(false);
   const saveMessageTimeoutRef = useRef<number | null>(null);
   const richTextEditorRef = useRef<RichTextEditorHandle | null>(null);
   const subjectInputRef = useRef<HTMLInputElement | null>(null);
