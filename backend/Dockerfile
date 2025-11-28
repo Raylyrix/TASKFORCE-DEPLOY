@@ -55,7 +55,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget --spider --quiet http://localhost:3000/health || exit 1
 
 # Use startup script that runs migrations then starts server
-# Inline the commands to avoid Railway auto-detection issues
-CMD ["/bin/sh", "-c", "if [ -n \"$DATABASE_URL\" ] && echo \"$DATABASE_URL\" | grep -q \"^postgres\"; then npx prisma migrate resolve --rolled-back 20251112153000_meeting_reminders 2>/dev/null || npx prisma migrate resolve --applied 20251112153000_meeting_reminders 2>/dev/null || true; npx prisma migrate deploy || echo 'Migration failed but continuing...'; fi && exec node dist/server.js"]
+# Railway keeps overriding CMD, so we use ENTRYPOINT to lock it in
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["if [ -n \"$DATABASE_URL\" ] && echo \"$DATABASE_URL\" | grep -q \"^postgres\"; then npx prisma migrate resolve --rolled-back 20251112153000_meeting_reminders 2>/dev/null || npx prisma migrate resolve --applied 20251112153000_meeting_reminders 2>/dev/null || true; npx prisma migrate deploy || echo 'Migration failed but continuing...'; fi && exec node dist/server.js"]
 
 
