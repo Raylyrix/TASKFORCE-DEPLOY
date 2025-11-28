@@ -333,6 +333,34 @@ export default function CampaignDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Follow-up Modal */}
+      {showFollowUpModal && (
+        <FollowUpModal
+          campaignId={campaignId}
+          onClose={() => setShowFollowUpModal(false)}
+          onSave={async (data) => {
+            try {
+              await api.followUps.create(campaignId, {
+                name: data.name,
+                steps: data.steps.map((step) => ({
+                  delayMs: step.delayMs,
+                  scheduledAt: step.scheduledAt,
+                  subject: step.subject,
+                  html: step.html,
+                  sendAsReply: step.sendAsReply,
+                  parentStepId: step.parentStepId,
+                  isNested: step.isNested,
+                })),
+              });
+              queryClient.invalidateQueries({ queryKey: ["follow-ups", campaignId] });
+              setShowFollowUpModal(false);
+            } catch (error: any) {
+              alert(error?.message || "Failed to create follow-up sequence");
+            }
+          }}
+        />
+      )}
     </Layout>
   );
 }
