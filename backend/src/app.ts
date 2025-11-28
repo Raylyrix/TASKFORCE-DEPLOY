@@ -19,6 +19,7 @@ export const createApp = () => {
     cors({
       origin: [
         "https://taskforce-webapp-production.up.railway.app",
+        "https://mail.google.com", // Allow Chrome extension content scripts
         "http://localhost:3000",
         "http://localhost:3001",
         ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
