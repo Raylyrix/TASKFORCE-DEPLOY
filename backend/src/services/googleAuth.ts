@@ -55,6 +55,16 @@ export const generateAuthUrl = (state: string, redirectUri?: string) => {
   });
 };
 
+// Helper function to add timeout to promises
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+};
+
 export const exchangeCodeForTokens = async (code: string, redirectUri?: string) => {
   const client = createOAuthClient(redirectUri);
   // Add timeout to prevent hanging - 10 seconds should be enough for token exchange
@@ -89,16 +99,6 @@ const calculateExpiryDate = (tokens: Credentials) => {
   }
 
   return new Date(Date.now() + 55 * 60 * 1000);
-};
-
-// Helper function to add timeout to promises
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
-    ),
-  ]);
 };
 
 export const upsertGoogleCalendarConnection = async ({
