@@ -62,10 +62,27 @@ export const importSheetForUser = async (userId: string, input: SheetImportInput
     auth: authClient,
   });
 
-  const metadata = await sheets.spreadsheets.get({
-    spreadsheetId,
-    includeGridData: false,
-  });
+  let metadata;
+  try {
+    metadata = await sheets.spreadsheets.get({
+      spreadsheetId,
+      includeGridData: false,
+    });
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error) {
+      if (error.code === 404) {
+        throw new Error(
+          `Spreadsheet not found. Please ensure the spreadsheet ID is correct and you have access to it. Spreadsheet ID: ${spreadsheetId}`
+        );
+      }
+      if (error.code === 403) {
+        throw new Error(
+          "Access denied. Please ensure you have permission to view this spreadsheet and that the Google account has the necessary permissions."
+        );
+      }
+    }
+    throw error;
+  }
 
   const spreadsheetTitle = metadata.data.properties?.title ?? "Untitled spreadsheet";
   const targetSheet =
@@ -84,10 +101,27 @@ export const importSheetForUser = async (userId: string, input: SheetImportInput
   const worksheetId = targetSheet.properties.sheetId?.toString() ?? undefined;
   const range = `'${worksheetTitle}'`;
 
-  const valuesResponse = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-  });
+  let valuesResponse;
+  try {
+    valuesResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error) {
+      if (error.code === 404) {
+        throw new Error(
+          `Worksheet "${worksheetTitle}" not found in the spreadsheet. Please check the worksheet name and try again.`
+        );
+      }
+      if (error.code === 403) {
+        throw new Error(
+          "Access denied to worksheet data. Please ensure you have permission to view this worksheet."
+        );
+      }
+    }
+    throw error;
+  }
 
   const rows = valuesResponse.data.values ?? [];
 
