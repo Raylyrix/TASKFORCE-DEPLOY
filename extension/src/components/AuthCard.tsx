@@ -7,31 +7,58 @@ type AuthCardProps = {
   backendUrl: string;
 };
 
-export const AuthCard = ({ isConnecting, onConnect, backendUrl }: AuthCardProps) => (
-  <Card>
-    <h2
-      style={{
-        fontSize: "18px",
-        marginBottom: "12px",
-      }}
-    >
-      Connect Google Workspace
-    </h2>
-    <p
-      style={{
-        color: "#5f6368",
-        fontSize: "14px",
-        lineHeight: 1.5,
-        marginBottom: "16px",
-      }}
-    >
-      Authorize TaskForce to send Gmail campaigns, import recipients from Google Sheets, and
-      schedule follow-ups. Ensure the backend at <strong>{backendUrl}</strong> is reachable.
-    </p>
-    <Button onClick={onConnect} disabled={isConnecting}>
-      {isConnecting ? "Connecting..." : "Connect Google Account"}
-    </Button>
-  </Card>
-);
+export const AuthCard = ({ isConnecting, onConnect, backendUrl }: AuthCardProps) => {
+  const isProduction = backendUrl.includes("railway.app") || backendUrl.includes("taskforce");
+  
+  return (
+    <Card>
+      <h2
+        style={{
+          fontSize: "18px",
+          marginBottom: "12px",
+        }}
+      >
+        Connect Google Workspace
+      </h2>
+      <p
+        style={{
+          color: "#5f6368",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          marginBottom: "16px",
+        }}
+      >
+        {isProduction ? (
+          <>
+            Click the button below to connect your Google account. This will allow TaskForce to send Gmail campaigns, 
+            import recipients from Google Sheets, and schedule follow-ups.
+          </>
+        ) : (
+          <>
+            Authorize TaskForce to send Gmail campaigns, import recipients from Google Sheets, and
+            schedule follow-ups. Backend: <strong>{backendUrl}</strong>
+          </>
+        )}
+      </p>
+      <Button onClick={onConnect} disabled={isConnecting}>
+        {isConnecting ? "Connecting..." : "Connect Google Account"}
+      </Button>
+      {!isProduction && (
+        <p
+          style={{
+            color: "#ea8600",
+            fontSize: "12px",
+            marginTop: "12px",
+            padding: "8px",
+            backgroundColor: "#fff4ce",
+            borderRadius: "6px",
+          }}
+        >
+          ⚠️ Using custom backend URL. Make sure it's accessible.
+        </p>
+      )}
+    </Card>
+  );
+};
 
 

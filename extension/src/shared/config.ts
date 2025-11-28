@@ -1,7 +1,8 @@
 import { storage } from "./storage";
 
 const BACKEND_URL_KEY = "backendUrl";
-export const DEFAULT_BACKEND_URL = "http://localhost:3000";
+// Use production backend URL by default for easy distribution
+export const DEFAULT_BACKEND_URL = "https://taskforce-backend-production.up.railway.app";
 
 export const getBackendUrl = async () => {
   const stored = await storage.getSync<string>(BACKEND_URL_KEY);

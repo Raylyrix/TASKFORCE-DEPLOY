@@ -64,6 +64,18 @@ export const FollowUpOverlay = () => {
     updateDraft({ ...draft, steps: [...draft.steps, defaultStep()] });
   };
 
+  const handleAddNestedStep = (parentIndex: number) => {
+    const parentStep = draft.steps[parentIndex];
+    if (!parentStep) return;
+    // Generate a unique ID for the parent step if it doesn't have one
+    const parentStepId = `step-${parentIndex}`;
+    const newStep = defaultStep(parentStepId);
+    // Insert after the parent step
+    const nextSteps = [...draft.steps];
+    nextSteps.splice(parentIndex + 1, 0, newStep);
+    updateDraft({ ...draft, steps: nextSteps });
+  };
+
   const handleRemoveStep = (index: number) => {
     const nextSteps = draft.steps.filter((_, stepIndex) => stepIndex !== index);
     updateDraft({ ...draft, steps: nextSteps });
@@ -231,6 +243,64 @@ export const FollowUpOverlay = () => {
                     placeholder="Remind them why the conversation matters and include a clear CTA."
                   />
                 </div>
+
+                {/* Reply vs Separate Email */}
+                <div style={{ borderTop: "1px solid #e0e3e7", paddingTop: "12px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={step.sendAsReply ?? false}
+                      onChange={(e) => handleStepChange(index, { sendAsReply: e.target.checked })}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        cursor: "pointer",
+                      }}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#3c4043" }}>
+                        Send as Reply (to original email thread)
+                      </span>
+                      <span style={{ fontSize: "12px", color: "#5f6368" }}>
+                        {step.sendAsReply
+                          ? "This follow-up will be sent as a reply to the original email, keeping the conversation thread together."
+                          : "This follow-up will be sent as a separate new email."}
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Add Nested Follow-up Button */}
+                {!step.isNested && (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleAddNestedStep(index)}
+                      style={{
+                        fontSize: "12px",
+                        padding: "6px 12px",
+                      }}
+                    >
+                      + Add nested follow-up
+                    </Button>
+                  </div>
+                )}
+
+                {/* Visual indicator for nested steps */}
+                {step.isNested && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      backgroundColor: "#e8f0fe",
+                      borderRadius: "8px",
+                      border: "1px solid #d2e3fc",
+                      fontSize: "12px",
+                      color: "#1a73e8",
+                    }}
+                  >
+                    ↳ Nested follow-up (child of previous step)
+                  </div>
+                )}
               </div>
             ))}
 

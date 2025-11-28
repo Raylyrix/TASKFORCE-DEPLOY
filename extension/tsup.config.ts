@@ -8,6 +8,7 @@ export default defineConfig({
     "content/index": "src/content/index.tsx",
     "options/index": "src/options/index.tsx",
     "popup/index": "src/popup/index.tsx",
+    "auth-callback": "src/auth-callback/index.ts",
   },
   format: ["esm"],
   target: "es2020",

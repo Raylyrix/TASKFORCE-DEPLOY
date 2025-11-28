@@ -110,6 +110,8 @@ const createDefaultFollowUpSequence = (): FollowUpSequenceDraft => ({
       html: `<p>Hi {{firstName}},</p>
 <p>Just checking whether you had a chance to review my earlier note.</p>
 <p>Thanks!<br/>{{senderName}}</p>`,
+      sendAsReply: false,
+      isNested: false,
     },
   ],
 });

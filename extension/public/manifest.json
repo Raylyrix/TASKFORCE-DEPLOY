@@ -20,12 +20,16 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "identity"],
-  "host_permissions": ["https://mail.google.com/*", "http://localhost:3000/*"],
+  "permissions": ["storage", "identity", "tabs"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://taskforce-backend-production.up.railway.app/*",
+    "http://localhost:3000/*"
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["content/index.js"],
-      "matches": ["https://mail.google.com/*"]
+      "resources": ["content/index.js", "auth-callback.html", "auth-callback.js"],
+      "matches": ["https://mail.google.com/*", "<all_urls>"]
     }
   ]
 }

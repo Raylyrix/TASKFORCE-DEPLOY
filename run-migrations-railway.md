@@ -85,3 +85,4 @@ If migrations fail:
 - Verify database service is running: `railway status`
 - Check migration files exist: `ls backend/prisma/migrations`
 
+

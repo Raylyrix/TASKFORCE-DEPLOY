@@ -16,9 +16,9 @@ Manifest V3 Chrome extension that injects a TaskForce campaign workspace directl
 - Options page to configure the backend base URL, popup to show quick campaign status.
 
 ### Default Configuration
-- Backend base URL defaults to `http://localhost:3000`
-- Manifest host permissions include `http://localhost:3000/*`
-- Update the Options page or `public/manifest.json` if the backend is hosted elsewhere
+- Backend base URL defaults to `https://taskforce-backend-production.up.railway.app` (production)
+- Manifest host permissions include production backend and localhost for development
+- Update the Options page if you need to use a different backend
 
 ### Folder Overview
 - `src/background` – Service worker handling auth, config, and messaging.

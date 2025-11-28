@@ -33,6 +33,9 @@ export type FollowUpStepDraft = {
   delayMs: number;
   subject: string;
   html: string;
+  sendAsReply?: boolean;
+  parentStepId?: string;
+  isNested?: boolean;
 };
 
 export type FollowUpSequenceDraft = {

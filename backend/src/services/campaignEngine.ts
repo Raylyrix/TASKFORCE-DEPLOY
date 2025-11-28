@@ -424,6 +424,44 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
 
   // Get the original message for this recipient
   const originalMessage = recipient.messages[0];
+  
+  // Read sendAsReply from offsetConfig
+  const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
+  const sendAsReply = offsetConfig?.sendAsReply ?? false;
+  
+  // Get threadId for reply if needed
+  let threadId: string | null = null;
+  if (sendAsReply && originalMessage?.gmailMessageId) {
+    // Fetch the Gmail message to get threadId
+    try {
+      const authClient = await googleAuthService.getAuthorizedClientForUser(step.sequence.campaign.userId);
+      const { google } = await import("googleapis");
+      const gmail = google.gmail({
+        version: "v1",
+        auth: authClient,
+      });
+      
+      const gmailMessage = await gmail.users.messages.get({
+        userId: "me",
+        id: originalMessage.gmailMessageId,
+        format: "minimal",
+      });
+      
+      threadId = gmailMessage.data.threadId ?? null;
+      
+      if (threadId) {
+        logger.info(
+          { recipientId: recipient.id, followUpStepId: step.id, threadId },
+          "Found threadId for reply follow-up"
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        { error, messageId: originalMessage.gmailMessageId },
+        "Failed to fetch threadId for reply, sending as new email"
+      );
+    }
+  }
 
   if (originalMessage) {
     // Check if we should stop based on reply
@@ -533,6 +571,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     to: recipient.email,
     subject: messageContent.subject,
     bodyHtml: messageContent.html,
+    threadId: sendAsReply ? threadId : null,
   });
 
   await prisma.messageLog.update({
@@ -695,7 +734,12 @@ const createFollowUpSequence = async (campaignId: string, config: FollowUpSequen
       steps: {
         create: config.steps.map((step, index) => ({
           order: index,
-          offsetConfig: { delayMs: step.delayMs },
+          offsetConfig: {
+            delayMs: step.delayMs,
+            sendAsReply: step.sendAsReply ?? false,
+            parentStepId: step.parentStepId,
+            isNested: step.isNested ?? false,
+          },
           templateSubject: step.subject,
           templateHtml: step.html,
         })),

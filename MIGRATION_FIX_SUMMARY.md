@@ -45,3 +45,4 @@ After these fixes:
 - ✅ Background tasks should work without "table does not exist" errors
 - ✅ Webapp should use correct Next.js build/start commands
 
+

@@ -12,6 +12,9 @@ const followUpStepSchema = z.object({
   delayMs: z.number().int().min(0),
   subject: z.string().min(1),
   html: z.string().min(1),
+  sendAsReply: z.boolean().optional().default(false),
+  parentStepId: z.string().optional(),
+  isNested: z.boolean().optional().default(false),
 });
 
 const createFollowUpSchema = z.object({

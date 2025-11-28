@@ -17,3 +17,4 @@ echo "Migration resolved successfully!"
 echo "Now running migrations..."
 npx prisma migrate deploy
 
+
