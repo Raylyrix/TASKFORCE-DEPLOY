@@ -64,10 +64,14 @@ export type CampaignCreationInput = {
 };
 
 export type FollowUpStepConfig = {
-  delayMs: number;
+  delayMs?: number; // Optional - can use scheduledAt instead
+  scheduledAt?: string; // ISO 8601 date string for absolute scheduling
   subject: string;
   html: string;
   maxAttempts?: number;
+  sendAsReply?: boolean;
+  parentStepId?: string;
+  isNested?: boolean;
 };
 
 export type FollowUpSequenceConfig = {

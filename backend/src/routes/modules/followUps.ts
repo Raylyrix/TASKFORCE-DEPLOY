@@ -163,9 +163,20 @@ followUpsRouter.post("/", requireUser, async (req, res, next) => {
       return;
     }
 
+    // Transform Zod-validated steps to FollowUpStepConfig format
+    const steps = payload.steps.map((step) => ({
+      delayMs: step.delayMs,
+      scheduledAt: step.scheduledAt,
+      subject: step.subject,
+      html: step.html,
+      sendAsReply: step.sendAsReply ?? false,
+      parentStepId: step.parentStepId,
+      isNested: step.isNested ?? false,
+    }));
+
     const sequence = await campaignEngine.createFollowUpSequence(payload.campaignId, {
       name: payload.name,
-      steps: payload.steps,
+      steps,
     });
 
     res.status(201).json({ sequence });
