@@ -33,8 +33,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy startup script from backend directory
-COPY backend/start.sh ./start.sh
+# Copy startup script from builder stage (already copied there)
+COPY --from=builder /app/start.sh ./start.sh
 RUN chmod +x ./start.sh
 
 # Create non-root user and ensure it owns the app directory
