@@ -14,8 +14,11 @@ export default function LoginPage() {
       setLoading(true);
       setError(null);
 
-      // Get current URL for redirect
-      const redirectUri = typeof window !== "undefined" ? window.location.origin + "/auth/callback" : undefined;
+      // Use backend callback URL (not webapp URL)
+      // The backend handles the OAuth callback, not the webapp
+      const redirectUri = typeof window !== "undefined" 
+        ? (process.env.NEXT_PUBLIC_API_URL || "https://taskforce-backend-production.up.railway.app") + "/api/auth/google/callback"
+        : undefined;
 
       // Start OAuth flow
       const { url } = await api.auth.startGoogleAuth(redirectUri);
