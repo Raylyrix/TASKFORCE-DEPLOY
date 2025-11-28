@@ -624,7 +624,37 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   let references: string | null = null;
   let replySubject: string | null = null;
   
-  if (sendAsReply && originalMessage?.gmailMessageId) {
+  // Validate that we have the original message if sendAsReply is enabled
+  if (sendAsReply && !originalMessage) {
+    logger.warn(
+      { 
+        recipientId: recipient.id, 
+        followUpStepId: step.id,
+        hasMessages: recipient.messages.length
+      },
+      "sendAsReply is true but no original message found for recipient, sending as new email"
+    );
+  } else if (sendAsReply && originalMessage && originalMessage.status !== MessageStatus.SENT) {
+    logger.warn(
+      { 
+        recipientId: recipient.id, 
+        followUpStepId: step.id,
+        messageLogId: originalMessage.id,
+        messageStatus: originalMessage.status
+      },
+      "sendAsReply is true but original message was not sent successfully, sending as new email"
+    );
+  } else if (sendAsReply && originalMessage && !originalMessage.gmailMessageId) {
+    logger.warn(
+      { 
+        recipientId: recipient.id, 
+        followUpStepId: step.id,
+        messageLogId: originalMessage.id,
+        messageStatus: originalMessage.status
+      },
+      "sendAsReply is true but original message has no gmailMessageId, sending as new email"
+    );
+  } else if (sendAsReply && originalMessage?.gmailMessageId && originalMessage.status === MessageStatus.SENT) {
     // Fetch the Gmail message to get threadId and Message-ID
     try {
       const authClient = await googleAuthService.getAuthorizedClientForUser(step.sequence.campaign.userId);
@@ -675,15 +705,45 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       
       if (threadId && inReplyTo) {
         logger.info(
-          { recipientId: recipient.id, followUpStepId: step.id, threadId, inReplyTo },
-          "Found threadId and Message-ID for reply follow-up"
+          { 
+            recipientId: recipient.id, 
+            followUpStepId: step.id, 
+            threadId, 
+            inReplyTo,
+            originalMessageId: originalMessage.gmailMessageId,
+            replySubject
+          },
+          "Successfully fetched threadId and Message-ID for reply follow-up"
+        );
+      } else {
+        logger.warn(
+          { 
+            recipientId: recipient.id,
+            followUpStepId: step.id,
+            originalMessageId: originalMessage.gmailMessageId,
+            hasThreadId: !!threadId,
+            hasInReplyTo: !!inReplyTo,
+            headersFound: Object.keys(headers).length
+          },
+          "Failed to extract required reply data from Gmail message"
         );
       }
     } catch (error) {
-      logger.warn(
-        { error, messageId: originalMessage.gmailMessageId },
-        "Failed to fetch threadId for reply, sending as new email"
+      logger.error(
+        { 
+          error, 
+          messageId: originalMessage.gmailMessageId,
+          recipientId: recipient.id,
+          followUpStepId: step.id,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        },
+        "Failed to fetch Gmail message for reply threading"
       );
+      // Reset reply variables to ensure we don't send with incomplete data
+      threadId = null;
+      inReplyTo = null;
+      references = null;
+      replySubject = null;
     }
   }
 
@@ -790,8 +850,33 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     payload,
   );
 
+  // Validate reply setup: if sendAsReply is true, we must have threadId and inReplyTo
+  const canSendAsReply = sendAsReply && threadId && inReplyTo;
+  
+  if (sendAsReply && !canSendAsReply) {
+    logger.warn(
+      { 
+        recipientId: recipient.id, 
+        followUpStepId: step.id,
+        hasThreadId: !!threadId,
+        hasInReplyTo: !!inReplyTo,
+        hasGmailMessageId: !!originalMessage?.gmailMessageId
+      },
+      "sendAsReply is true but missing required reply data, sending as new email instead"
+    );
+  }
+
   // Use reply subject if this is a reply, otherwise use the template subject
-  const finalSubject = sendAsReply && replySubject ? replySubject : messageContent.subject;
+  let finalSubject: string;
+  if (canSendAsReply && replySubject) {
+    finalSubject = replySubject;
+  } else {
+    finalSubject = messageContent.subject;
+    // If sendAsReply was requested but we don't have reply data, ensure subject doesn't have "Re:" prefix
+    if (sendAsReply && !canSendAsReply && finalSubject.startsWith("Re: ")) {
+      finalSubject = finalSubject.replace(/^Re: /i, "");
+    }
+  }
 
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: step.sequence.campaign.userId,
@@ -799,11 +884,24 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     subject: finalSubject,
     bodyHtml: messageContent.html,
     bodyText: htmlToText(messageContent.html), // Add plain text version
-    threadId: sendAsReply ? threadId : null,
-    inReplyTo: sendAsReply ? inReplyTo : null,
-    references: sendAsReply ? references : null,
+    threadId: canSendAsReply ? threadId : null,
+    inReplyTo: canSendAsReply ? inReplyTo : null,
+    references: canSendAsReply ? references : null,
     isCampaign: true, // Mark as campaign email for proper headers
   });
+
+  if (canSendAsReply) {
+    logger.info(
+      { 
+        recipientId: recipient.id, 
+        followUpStepId: step.id,
+        threadId,
+        inReplyTo,
+        messageId: sendResult.id
+      },
+      "Follow-up sent as reply successfully"
+    );
+  }
 
   await prisma.messageLog.update({
     where: { id: messageLog.id },
