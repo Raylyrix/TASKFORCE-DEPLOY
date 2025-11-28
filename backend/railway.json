@@ -8,6 +8,8 @@
     "runtime": "V2",
     "numReplicas": 1,
     "healthcheckPath": "/health",
-    "startCommand": null
+    "startCommand": null,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
   }
 }
