@@ -51,12 +51,12 @@ USER nodejs
 EXPOSE 3000
 
 # Health check (backend listens on port 3000 internally, PORT env is for external)
+# Use node to check health endpoint (wget not available in Alpine by default)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --spider --quiet http://localhost:3000/health || exit 1
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Use startup script that runs migrations then starts server
-# Railway keeps overriding CMD, so we use ENTRYPOINT to lock it in
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD ["if [ -n \"$DATABASE_URL\" ] && echo \"$DATABASE_URL\" | grep -q \"^postgres\"; then npx prisma migrate resolve --rolled-back 20251112153000_meeting_reminders 2>/dev/null || npx prisma migrate resolve --applied 20251112153000_meeting_reminders 2>/dev/null || true; npx prisma migrate deploy || echo 'Migration failed but continuing...'; fi && exec node dist/server.js"]
+# Use exec form to ensure the script runs properly even if Railway overrides CMD
+CMD ["./start.sh"]
 
 
