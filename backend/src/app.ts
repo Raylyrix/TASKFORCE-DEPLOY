@@ -17,16 +17,39 @@ export const createApp = () => {
 
   app.use(
     cors({
-      origin: [
-        "https://taskforce-webapp-production.up.railway.app",
-        "https://mail.google.com", // Allow Chrome extension content scripts
-        "http://localhost:3000",
-        "http://localhost:3001",
-        ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
-      ],
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, Postman, or Chrome extensions using fetch)
+        if (!origin) {
+          return callback(null, true);
+        }
+
+        const allowedOrigins = [
+          "https://taskforce-webapp-production.up.railway.app",
+          "https://mail.google.com", // Allow Chrome extension content scripts
+          "http://localhost:3000",
+          "http://localhost:3001",
+          ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
+        ];
+
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+
+        // For Chrome extensions, also allow chrome-extension:// origins
+        if (origin.startsWith("chrome-extension://")) {
+          return callback(null, true);
+        }
+
+        // Reject other origins
+        callback(new Error("Not allowed by CORS"));
+      },
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-User-Id", "X-Requested-With"],
+      exposedHeaders: ["X-Request-ID"],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
     }),
   );
   app.use(express.json({ limit: "10mb" })); // Increased for email attachments

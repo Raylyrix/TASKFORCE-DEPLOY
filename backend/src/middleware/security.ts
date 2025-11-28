@@ -94,6 +94,11 @@ export const requestSizeLimit: RequestHandler = (req, res, next) => {
 
 // Security headers
 export const securityHeaders: RequestHandler = (req, res, next) => {
+  // Skip security headers for OPTIONS requests to allow CORS preflight
+  if (req.method === "OPTIONS") {
+    return next();
+  }
+
   // Prevent clickjacking
   res.setHeader("X-Frame-Options", "DENY");
   
@@ -108,10 +113,10 @@ export const securityHeaders: RequestHandler = (req, res, next) => {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
   
-  // Content Security Policy
+  // Content Security Policy - relaxed for Chrome extensions
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://www.googleapis.com https://accounts.google.com;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://www.googleapis.com https://accounts.google.com https://mail.google.com;"
   );
   
   // Referrer Policy
