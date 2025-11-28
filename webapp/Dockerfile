@@ -3,14 +3,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files (build context is webapp/ directory)
-COPY package*.json ./
+# Copy package files from webapp directory (Railway builds from repo root)
+COPY webapp/package*.json ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy source code
-COPY . .
+# Copy source code from webapp directory
+COPY webapp/ .
 
 # Build Next.js app
 # Railway automatically passes environment variables as build args
@@ -31,7 +31,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install production dependencies
-COPY package*.json ./
+COPY webapp/package*.json ./
 RUN npm ci --only=production
 
 # Copy built files
