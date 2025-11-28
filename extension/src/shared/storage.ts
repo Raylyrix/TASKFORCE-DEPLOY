@@ -5,9 +5,29 @@ const getArea = (area: StorageArea) =>
 
 const wrapGet = async <T>(area: StorageArea, key: string): Promise<T | undefined> =>
   new Promise((resolve, reject) => {
+    // Check if extension context is still valid
+    try {
+      if (typeof chrome === "undefined" || 
+          typeof chrome.runtime === "undefined" || 
+          chrome.runtime.id === undefined) {
+        reject(new Error("Extension context invalidated"));
+        return;
+      }
+    } catch {
+      reject(new Error("Extension context invalidated"));
+      return;
+    }
+
     getArea(area).get([key], (result) => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        const error = chrome.runtime.lastError;
+        // Check if error is due to context invalidation
+        if (error.message?.includes("Extension context invalidated") ||
+            error.message?.includes("message port closed")) {
+          reject(new Error("Extension context invalidated"));
+        } else {
+          reject(error);
+        }
         return;
       }
       resolve(result[key] as T | undefined);
@@ -16,9 +36,29 @@ const wrapGet = async <T>(area: StorageArea, key: string): Promise<T | undefined
 
 const wrapSet = async <T>(area: StorageArea, key: string, value: T) =>
   new Promise<void>((resolve, reject) => {
+    // Check if extension context is still valid
+    try {
+      if (typeof chrome === "undefined" || 
+          typeof chrome.runtime === "undefined" || 
+          chrome.runtime.id === undefined) {
+        reject(new Error("Extension context invalidated"));
+        return;
+      }
+    } catch {
+      reject(new Error("Extension context invalidated"));
+      return;
+    }
+
     getArea(area).set({ [key]: value }, () => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        const error = chrome.runtime.lastError;
+        // Check if error is due to context invalidation
+        if (error.message?.includes("Extension context invalidated") ||
+            error.message?.includes("message port closed")) {
+          reject(new Error("Extension context invalidated"));
+        } else {
+          reject(error);
+        }
         return;
       }
       resolve();

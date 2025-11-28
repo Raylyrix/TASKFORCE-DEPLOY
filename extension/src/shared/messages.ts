@@ -34,9 +34,30 @@ export const sendRuntimeMessage = <TResponse = void, TPayload = unknown>(
   message: RuntimeMessage<TPayload>,
 ) =>
   new Promise<TResponse>((resolve, reject) => {
+    // Check if extension context is still valid
+    try {
+      if (typeof chrome === "undefined" || 
+          typeof chrome.runtime === "undefined" || 
+          chrome.runtime.id === undefined) {
+        reject(new Error("Extension context invalidated"));
+        return;
+      }
+    } catch {
+      reject(new Error("Extension context invalidated"));
+      return;
+    }
+
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        const error = chrome.runtime.lastError;
+        // Check if error is due to context invalidation
+        if (error.message?.includes("Extension context invalidated") ||
+            error.message?.includes("message port closed") ||
+            error.message?.includes("Could not establish connection")) {
+          reject(new Error("Extension context invalidated"));
+        } else {
+          reject(error);
+        }
         return;
       }
       resolve(response as TResponse);

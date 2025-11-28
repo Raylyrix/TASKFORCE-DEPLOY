@@ -1120,7 +1120,13 @@ const init = () => {
     // Initialize Gmail tracking indicators
     import("./gmailTracking").then(({ initGmailTracking }) => {
       initGmailTracking().catch((error) => {
-        console.error("[TaskForce] Error initializing Gmail tracking:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes("Extension context invalidated") || 
+            errorMessage.includes("message port closed")) {
+          console.warn("[TaskForce] Extension context invalidated, tracking will resume after page reload");
+        } else {
+          console.error("[TaskForce] Error initializing Gmail tracking:", error);
+        }
       });
     });
 

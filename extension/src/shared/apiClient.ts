@@ -20,10 +20,51 @@ const buildHeaders = async (inputHeaders?: HeadersInit) => {
   return headers;
 };
 
+/**
+ * Check if the extension context is still valid
+ */
+const isExtensionContextValid = (): boolean => {
+  try {
+    return typeof chrome !== "undefined" && 
+           typeof chrome.runtime !== "undefined" && 
+           chrome.runtime.id !== undefined;
+  } catch {
+    return false;
+  }
+};
+
 export const apiClient = {
   async request<TResponse>(path: string, options: RequestOptions = {}) {
-    const backendUrl = await getBackendUrl();
-    const headers = await buildHeaders(options.headers);
+    // Check if extension context is still valid
+    if (!isExtensionContextValid()) {
+      throw new Error("Extension context invalidated. Please reload the page.");
+    }
+
+    let backendUrl: string;
+    try {
+      backendUrl = await getBackendUrl();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Extension context invalidated") || 
+          errorMessage.includes("message port closed") ||
+          !isExtensionContextValid()) {
+        throw new Error("Extension context invalidated. Please reload the page.");
+      }
+      throw error;
+    }
+
+    let headers: Headers;
+    try {
+      headers = await buildHeaders(options.headers);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("Extension context invalidated") || 
+          errorMessage.includes("message port closed") ||
+          !isExtensionContextValid()) {
+        throw new Error("Extension context invalidated. Please reload the page.");
+      }
+      throw error;
+    }
 
     const response = await fetch(`${backendUrl}${path}`, {
       ...options,

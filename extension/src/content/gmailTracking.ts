@@ -19,16 +19,46 @@ let trackingDataFetched = false;
 let observer: MutationObserver | null = null;
 
 /**
+ * Check if the extension context is still valid
+ */
+function isExtensionContextValid(): boolean {
+  try {
+    return typeof chrome !== "undefined" && 
+           typeof chrome.runtime !== "undefined" && 
+           chrome.runtime.id !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch tracking data from backend
  */
 async function fetchTrackingData(): Promise<TrackingMap> {
+  // Check if extension context is still valid
+  if (!isExtensionContextValid()) {
+    console.warn("[TaskForce] Extension context invalidated, skipping tracking data fetch");
+    return {};
+  }
+
   try {
-    const backendUrl = await getBackendUrl();
     const data = await apiClient.request<{ tracking: TrackingMap }>(
       "/api/tracking/sent-emails"
     );
     return data.tracking || {};
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Check if error is due to context invalidation
+    if (errorMessage.includes("Extension context invalidated") || 
+        errorMessage.includes("message port closed") ||
+        !isExtensionContextValid()) {
+      console.warn("[TaskForce] Extension context invalidated, tracking will resume after page reload");
+      // Cleanup and stop trying
+      cleanupGmailTracking();
+      return {};
+    }
+    
     console.error("[TaskForce] Error fetching tracking data:", error);
     return {};
   }
@@ -200,6 +230,8 @@ function processEmailRows() {
   });
 }
 
+let refreshInterval: number | null = null;
+
 /**
  * Initialize Gmail tracking indicators
  */
@@ -208,34 +240,80 @@ export async function initGmailTracking() {
     return;
   }
 
+  // Check if extension context is still valid
+  if (!isExtensionContextValid()) {
+    console.warn("[TaskForce] Extension context invalidated, cannot initialize tracking");
+    return;
+  }
+
   console.log("[TaskForce] Initializing Gmail tracking indicators...");
 
-  // Fetch tracking data
-  trackingData = await fetchTrackingData();
-  trackingDataFetched = true;
-
-  // Process existing rows
-  processEmailRows();
-
-  // Observe DOM changes to inject indicators into new emails
-  observer = new MutationObserver(() => {
-    if (trackingDataFetched) {
-      processEmailRows();
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  // Refresh tracking data periodically (every 30 seconds)
-  setInterval(async () => {
+  try {
+    // Fetch tracking data
     trackingData = await fetchTrackingData();
-    processEmailRows();
-  }, 30000);
+    trackingDataFetched = true;
 
-  console.log("[TaskForce] Gmail tracking indicators initialized");
+    // Process existing rows
+    processEmailRows();
+
+    // Observe DOM changes to inject indicators into new emails
+    observer = new MutationObserver(() => {
+      if (trackingDataFetched && isExtensionContextValid()) {
+        processEmailRows();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Refresh tracking data periodically (every 30 seconds)
+    // Clear any existing interval first
+    if (refreshInterval !== null) {
+      clearInterval(refreshInterval);
+    }
+    
+    refreshInterval = window.setInterval(async () => {
+      // Check if context is still valid before fetching
+      if (!isExtensionContextValid()) {
+        console.warn("[TaskForce] Extension context invalidated, stopping tracking refresh");
+        cleanupGmailTracking();
+        if (refreshInterval !== null) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+        }
+        return;
+      }
+
+      try {
+        trackingData = await fetchTrackingData();
+        processEmailRows();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes("Extension context invalidated") || 
+            errorMessage.includes("message port closed")) {
+          console.warn("[TaskForce] Extension context invalidated, stopping tracking refresh");
+          cleanupGmailTracking();
+          if (refreshInterval !== null) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+          }
+        }
+      }
+    }, 30000);
+
+    console.log("[TaskForce] Gmail tracking indicators initialized");
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("Extension context invalidated") || 
+        errorMessage.includes("message port closed")) {
+      console.warn("[TaskForce] Extension context invalidated during initialization");
+      cleanupGmailTracking();
+    } else {
+      console.error("[TaskForce] Error initializing Gmail tracking:", error);
+    }
+  }
 }
 
 /**
@@ -246,10 +324,18 @@ export function cleanupGmailTracking() {
     observer.disconnect();
     observer = null;
   }
+
+  if (refreshInterval !== null) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
   
   // Remove all indicators
   document.querySelectorAll(".taskforce-email-tracking-indicator").forEach((el) => {
     el.remove();
   });
+
+  trackingDataFetched = false;
+  trackingData = {};
 }
 
