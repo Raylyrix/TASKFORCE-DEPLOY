@@ -881,9 +881,13 @@ export const api = {
     create: (campaignId: string, data: {
       name: string;
       steps: Array<{
-        delayMs: number;
+        delayMs?: number;
+        scheduledAt?: string;
         subject: string;
         html: string;
+        sendAsReply?: boolean;
+        parentStepId?: string;
+        isNested?: boolean;
       }>;
     }) =>
       apiRequest<{

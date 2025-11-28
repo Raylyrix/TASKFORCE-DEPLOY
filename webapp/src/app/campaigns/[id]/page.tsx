@@ -232,11 +232,35 @@ export default function CampaignDetailsPage() {
                       <div className="mt-3 pt-3 border-t border-gray-200">
                         <div className="text-xs font-medium text-gray-500 mb-2">Steps:</div>
                         <div className="space-y-1">
-                          {sequence.steps.map((step: any, index: number) => (
-                            <div key={step.id} className="text-xs text-gray-600">
-                              {index + 1}. {step.templateSubject || "(No subject)"} - {Math.round((step.offsetConfig?.delayMs || 0) / (1000 * 60 * 60))}h delay
-                            </div>
-                          ))}
+                          {sequence.steps.map((step: any, index: number) => {
+                            const offsetConfig = step.offsetConfig || {};
+                            let timingText = "";
+                            if (offsetConfig.scheduledAt) {
+                              // Show specific date/time
+                              const date = new Date(offsetConfig.scheduledAt);
+                              const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                              const timeStr = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                              timingText = `${dateStr} at ${timeStr}`;
+                            } else if (offsetConfig.delayMs) {
+                              // Show relative delay
+                              const hours = Math.round(offsetConfig.delayMs / (1000 * 60 * 60));
+                              const days = Math.round(offsetConfig.delayMs / (1000 * 60 * 60 * 24));
+                              if (days >= 1) {
+                                timingText = `${days} day${days !== 1 ? "s" : ""} later`;
+                              } else {
+                                timingText = `${hours}h later`;
+                              }
+                            } else {
+                              timingText = "No delay set";
+                            }
+                            return (
+                              <div key={step.id} className="text-xs text-gray-600">
+                                {index + 1}. {step.templateSubject || "(No subject)"} - {timingText}
+                                {offsetConfig.sendAsReply && <span className="text-blue-600"> (as reply)</span>}
+                                {offsetConfig.isNested && <span className="text-gray-500"> (nested)</span>}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -343,15 +367,23 @@ export default function CampaignDetailsPage() {
             try {
               await api.followUps.create(campaignId, {
                 name: data.name,
-                steps: data.steps.map((step) => ({
-                  delayMs: step.delayMs,
-                  scheduledAt: step.scheduledAt,
-                  subject: step.subject,
-                  html: step.html,
-                  sendAsReply: step.sendAsReply,
-                  parentStepId: step.parentStepId,
-                  isNested: step.isNested,
-                })),
+                steps: data.steps.map((step) => {
+                  const result: any = {
+                    subject: step.subject,
+                    html: step.html,
+                    sendAsReply: step.sendAsReply ?? false,
+                    isNested: step.isNested ?? false,
+                  };
+                  if (step.useDateTime && step.scheduledAt) {
+                    result.scheduledAt = step.scheduledAt;
+                  } else if (step.delayMs !== undefined) {
+                    result.delayMs = step.delayMs;
+                  }
+                  if (step.parentStepId) {
+                    result.parentStepId = step.parentStepId;
+                  }
+                  return result;
+                }),
               });
               queryClient.invalidateQueries({ queryKey: ["follow-ups", campaignId] });
               setShowFollowUpModal(false);

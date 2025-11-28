@@ -1536,11 +1536,34 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
           >
             <strong style={{ fontSize: "13px" }}>{followUpSequence.name}</strong>
             <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", color: "#3c4043" }}>
-              {followUpSequence.steps.map((step, index) => (
-                <li key={`follow-up-step-${index}`}>
-                  {Math.round(step.delayMs / 3600000)}h later — {step.subject}
-                </li>
-              ))}
+              {followUpSequence.steps.map((step, index) => {
+                let timingText = "";
+                if (step.useDateTime && step.scheduledAt) {
+                  // Show specific date/time
+                  const date = new Date(step.scheduledAt);
+                  const dateStr = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                  const timeStr = date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                  timingText = `${dateStr} at ${timeStr}`;
+                } else if (step.delayMs) {
+                  // Show relative delay
+                  const hours = Math.round(step.delayMs / 3600000);
+                  const days = Math.round(step.delayMs / (24 * 3600000));
+                  if (days >= 1) {
+                    timingText = `${days} day${days !== 1 ? "s" : ""} later`;
+                  } else {
+                    timingText = `${hours}h later`;
+                  }
+                } else {
+                  timingText = "No delay set";
+                }
+                return (
+                  <li key={`follow-up-step-${index}`}>
+                    {timingText} — {step.subject}
+                    {step.sendAsReply && <span style={{ color: "#1a73e8", fontSize: "11px" }}> (as reply)</span>}
+                    {step.isNested && <span style={{ color: "#5f6368", fontSize: "11px" }}> (nested)</span>}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : (
