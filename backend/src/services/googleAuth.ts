@@ -81,6 +81,16 @@ const calculateExpiryDate = (tokens: Credentials) => {
   return new Date(Date.now() + 55 * 60 * 1000);
 };
 
+// Helper function to add timeout to promises
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+};
+
 const upsertGoogleCalendarConnection = async ({
   userId,
   profile,
@@ -114,17 +124,34 @@ const upsertGoogleCalendarConnection = async ({
 
   try {
     const calendar = google.calendar({ version: "v3", auth: authClient });
-    const primaryCalendar = await calendar.calendarList.get({ calendarId: "primary" });
+    // Add timeout to prevent hanging - 5 seconds should be enough for calendar metadata
+    const primaryCalendar = await withTimeout(
+      calendar.calendarList.get({ calendarId: "primary" }),
+      5000, // 5 second timeout
+      "Fetch primary calendar metadata"
+    );
     defaultCalendarId = primaryCalendar.data.id ?? "primary";
     timeZone = primaryCalendar.data.timeZone ?? null;
     calendarSummary = primaryCalendar.data.summary ?? null;
+    logger.info({ userId, defaultCalendarId, timeZone }, "Successfully fetched primary calendar metadata");
   } catch (error) {
-    logger.warn({ error, userId, scope }, "Failed to fetch primary calendar metadata - calendar scopes may not be granted");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      { 
+        error: errorMessage, 
+        userId, 
+        scope,
+        timeout: errorMessage.includes("timed out"),
+      },
+      "Failed to fetch primary calendar metadata - calendar scopes may not be granted or API timed out"
+    );
     // Check if calendar scopes are in the requested scopes
     const hasCalendarScope = scope.includes("calendar");
     if (!hasCalendarScope) {
       logger.error({ userId, scope }, "Calendar scope not found in OAuth token - calendar connection may not work properly");
     }
+    // Continue with default values - authentication should not fail due to calendar issues
+    defaultCalendarId = "primary";
   }
 
   await prisma.calendarConnection.upsert({
@@ -238,7 +265,9 @@ export const upsertGoogleAccount = async (
     });
   }
 
-  await upsertGoogleCalendarConnection({
+  // Don't block authentication on calendar connection - make it non-blocking
+  // Calendar connection can be set up later if needed
+  upsertGoogleCalendarConnection({
     userId: user.id,
     profile,
     accessToken,
@@ -246,6 +275,12 @@ export const upsertGoogleAccount = async (
     scope,
     tokenType,
     expiryDate,
+  }).catch((error) => {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error), userId: user.id },
+      "Failed to set up calendar connection during authentication - continuing anyway"
+    );
+    // Don't throw - calendar connection failure shouldn't block authentication
   });
 
   return { user };
