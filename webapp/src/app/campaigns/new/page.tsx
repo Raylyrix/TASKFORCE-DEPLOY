@@ -126,7 +126,7 @@ export default function NewCampaignPage() {
             payload: row,
           };
         })
-        .filter((r): r is { email: string; payload: Record<string, string> } => r !== null);
+        .filter((r: { email: string; payload: Record<string, string> } | null): r is { email: string; payload: Record<string, string> } => r !== null);
 
       if (validRecipients.length === 0) {
         throw new Error("No valid email addresses found in the selected column. Please check your data.");
