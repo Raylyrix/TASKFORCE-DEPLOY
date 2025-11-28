@@ -14,6 +14,7 @@ import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { CampaignLaunchProgress } from "./CampaignLaunchProgress";
 import { useSchedulerBootstrap } from "../hooks/useSchedulerBootstrap";
 import { MeetingTypePicker } from "./MeetingTypePicker";
+import { EmailBestPracticesModal } from "./EmailBestPracticesModal";
 
 type ComposerPanelProps = {
   onCampaignCreated: () => Promise<unknown>;
@@ -1713,6 +1714,23 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                setShowBestPractices(true);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+              }}
+            >
+              <span>ℹ️</span>
+              <span>Best Practices</span>
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 handleTogglePreview();
               }}
             >
@@ -1825,21 +1843,25 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
         </Card>
       </div>
       <FollowUpOverlay />
-          <CampaignLaunchProgress
-            open={launchMonitor.open}
-            status={launchMonitor.status}
-            phase={launchMonitor.phase}
-            percent={launchMonitor.percent}
-            metrics={launchMonitor.metrics}
-            logs={launchMonitor.logs}
-            error={launchMonitor.error}
-            canPause={canPauseLaunch}
-            canStop={canStopLaunch}
-            canClose={canCloseLaunchMonitor}
-            onPause={canPauseLaunch ? handlePauseCampaign : undefined}
-            onStop={canStopLaunch ? handleCancelCampaign : undefined}
-            onClose={handleCloseLaunchMonitor}
-          />
+      <CampaignLaunchProgress
+        open={launchMonitor.open}
+        status={launchMonitor.status}
+        phase={launchMonitor.phase}
+        percent={launchMonitor.percent}
+        metrics={launchMonitor.metrics}
+        logs={launchMonitor.logs}
+        error={launchMonitor.error}
+        canPause={canPauseLaunch}
+        canStop={canStopLaunch}
+        canClose={canCloseLaunchMonitor}
+        onPause={canPauseLaunch ? handlePauseCampaign : undefined}
+        onStop={canStopLaunch ? handleCancelCampaign : undefined}
+        onClose={handleCloseLaunchMonitor}
+      />
+      <EmailBestPracticesModal
+        isOpen={showBestPractices}
+        onClose={() => setShowBestPractices(false)}
+      />
     </>
   );
 };

@@ -5,13 +5,22 @@ import { useExtensionStore } from "../shared/store";
 import { Button } from "./Button";
 import { RichTextEditor } from "./RichTextEditor";
 
-const defaultStep = () => ({
-  delayMs: 48 * 60 * 60 * 1000,
-  subject: "Gentle nudge",
-  html: `<p>Hi {{firstName}},</p>
+const defaultStep = (parentStepId?: string) => {
+  const defaultDelay = 48 * 60 * 60 * 1000; // 48 hours
+  const defaultScheduledAt = new Date(Date.now() + defaultDelay).toISOString();
+  return {
+    delayMs: defaultDelay,
+    scheduledAt: defaultScheduledAt,
+    useDateTime: false,
+    subject: "Gentle nudge",
+    html: `<p>Hi {{firstName}},</p>
 <p>Just wanted to bump this to the top of your inbox.</p>
 <p>Thanks!<br/>{{senderName}}</p>`,
-});
+    sendAsReply: false,
+    isNested: !!parentStepId,
+    parentStepId: parentStepId,
+  };
+};
 
 export const FollowUpOverlay = () => {
   const followUpOverlay = useExtensionStore((state) => state.followUpOverlay);

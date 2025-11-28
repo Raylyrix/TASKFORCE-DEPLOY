@@ -334,6 +334,33 @@ export default function FollowUpModal({
                       </p>
                     </div>
                   )}
+
+                  {/* Add Nested Follow-up Button */}
+                  {!step.isNested && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => addNestedStep(step.id)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors border border-primary-200"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add nested follow-up
+                      </button>
+                      <p className="text-xs text-gray-500 mt-1 ml-7">
+                        Add a follow-up that will be sent after this one in the same sequence
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Visual indicator for nested steps */}
+                  {step.isNested && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-700 flex items-center gap-2">
+                        <span>↳</span>
+                        <span>Nested follow-up (child of previous step)</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

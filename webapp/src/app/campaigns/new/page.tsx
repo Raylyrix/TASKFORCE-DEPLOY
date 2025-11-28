@@ -26,6 +26,7 @@ import {
   Info,
 } from "lucide-react";
 import { EmailBestPracticesModal } from "@/components/EmailBestPracticesModal";
+import { CampaignLaunchProgress } from "@/components/CampaignLaunchProgress";
 
 type StepId = "audience" | "email" | "schedule" | "review";
 
@@ -59,6 +60,8 @@ export default function NewCampaignPage() {
   const [selectedMeetingType, setSelectedMeetingType] = useState<string | null>(null);
   const [meetingLink, setMeetingLink] = useState<string | null>(null);
   const [showBestPractices, setShowBestPractices] = useState(false);
+  const [showLaunchProgress, setShowLaunchProgress] = useState(false);
+  const [launchedCampaignId, setLaunchedCampaignId] = useState<string | null>(null);
 
   const { data: meetingTypes } = useQuery({
     queryKey: ["meeting-types"],
@@ -162,14 +165,18 @@ export default function NewCampaignPage() {
       });
     },
     onSuccess: async (data) => {
-      try {
+      if (data?.id) {
         // Schedule the campaign
-        await api.campaigns.schedule(data.id, new Date(startAt).toISOString());
-        router.push(`/campaigns/${data.id}`);
-      } catch (error: any) {
-        console.error("Schedule error:", error);
-        alert(error?.message || "Campaign created but failed to schedule. Please schedule it manually.");
-        router.push(`/campaigns/${data.id}`);
+        try {
+          await api.campaigns.schedule(data.id, startAt);
+          // Show launch progress modal
+          setLaunchedCampaignId(data.id);
+          setShowLaunchProgress(true);
+        } catch (scheduleError: any) {
+          console.error("Schedule error:", scheduleError);
+          alert(scheduleError?.message || "Campaign created but scheduling failed. Please schedule manually.");
+          router.push(`/campaigns/${data.id}`);
+        }
       }
     },
     onError: (error: any) => {
@@ -669,6 +676,26 @@ export default function NewCampaignPage() {
       <EmailBestPracticesModal
         isOpen={showBestPractices}
         onClose={() => setShowBestPractices(false)}
+      />
+
+      {/* Campaign Launch Progress */}
+      <CampaignLaunchProgress
+        campaignId={launchedCampaignId}
+        isOpen={showLaunchProgress}
+        onClose={() => {
+          setShowLaunchProgress(false);
+          if (launchedCampaignId) {
+            router.push(`/campaigns/${launchedCampaignId}`);
+          }
+        }}
+        onComplete={() => {
+          // Optionally redirect after completion
+          setTimeout(() => {
+            if (launchedCampaignId) {
+              router.push(`/campaigns/${launchedCampaignId}`);
+            }
+          }, 2000);
+        }}
       />
     </Layout>
   );

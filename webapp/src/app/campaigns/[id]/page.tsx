@@ -8,12 +8,15 @@ import { api } from "@/lib/api";
 import { ArrowLeft, Mail, TrendingUp, Eye, MousePointerClick, XCircle, Users, Plus, Clock } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import FollowUpModal from "@/components/FollowUpModal";
 
 export default function CampaignDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const campaignId = params?.id as string;
   const [selectedRecipient, setSelectedRecipient] = useState<string | null>(null);
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
