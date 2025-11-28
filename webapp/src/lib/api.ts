@@ -18,6 +18,16 @@ type RequestOptions = {
   body?: unknown;
 };
 
+// Helper function to add timeout to fetch requests
+function fetchWithTimeout(url: string, config: RequestInit, timeoutMs: number): Promise<Response> {
+  return Promise.race([
+    fetch(url, config),
+    new Promise<Response>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", headers = {}, body } = options;
 
@@ -42,8 +52,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     config.body = JSON.stringify(body);
   }
 
+  // Use longer timeout for authentication requests (30 seconds)
+  // Other requests use 20 seconds timeout
+  const isAuthRequest = path.includes("/auth/");
+  const timeoutMs = isAuthRequest ? 30000 : 20000;
+
   try {
-    const response = await fetch(`${API_URL}${path}`, config);
+    const response = await fetchWithTimeout(`${API_URL}${path}`, config, timeoutMs);
 
     if (!response.ok) {
       const errorText = await response.text();
