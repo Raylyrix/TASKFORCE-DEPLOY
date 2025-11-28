@@ -1,6 +1,144 @@
+import { useState, useMemo } from "react";
 import { Button } from "./Button";
+import { useExtensionStore } from "../shared/store";
+
+type EmailIssue = {
+  type: "error" | "warning" | "info";
+  message: string;
+  suggestion?: string;
+};
+
+const checkEmail = (subject: string, body: string): EmailIssue[] => {
+  const issues: EmailIssue[] = [];
+  const subjectLower = subject.toLowerCase();
+  const bodyLower = body.toLowerCase();
+  const bodyText = body.replace(/<[^>]*>/g, ""); // Strip HTML tags for text analysis
+
+  // Spam words in subject
+  const spamWords = [
+    "free", "win", "winner", "congratulations", "urgent", "act now", "limited time",
+    "click here", "buy now", "discount", "offer expires", "guaranteed", "no risk",
+    "make money", "cash", "$$$", "!!!", "asap", "limited offer"
+  ];
+  const foundSpamWords = spamWords.filter(word => subjectLower.includes(word));
+  if (foundSpamWords.length > 0) {
+    issues.push({
+      type: "error",
+      message: `Subject contains spam trigger words: ${foundSpamWords.join(", ")}`,
+      suggestion: "Remove these words or replace them with more natural language"
+    });
+  }
+
+  // Subject length
+  if (subject.length > 50) {
+    issues.push({
+      type: "warning",
+      message: `Subject line is ${subject.length} characters (recommended: under 50)`,
+      suggestion: "Shorter subject lines have better open rates"
+    });
+  }
+
+  // All caps in subject
+  if (subject === subject.toUpperCase() && subject.length > 5) {
+    issues.push({
+      type: "error",
+      message: "Subject line is in all caps",
+      suggestion: "Use normal capitalization for better deliverability"
+    });
+  }
+
+  // Excessive punctuation
+  const excessivePunct = /[!?]{2,}/.test(subject);
+  if (excessivePunct) {
+    issues.push({
+      type: "warning",
+      message: "Subject has excessive punctuation (!!, ???)",
+      suggestion: "Use single punctuation marks"
+    });
+  }
+
+  // Personalization check
+  const hasMergeFields = /{{[^}]+}}/.test(subject) || /{{[^}]+}}/.test(body);
+  if (!hasMergeFields) {
+    issues.push({
+      type: "warning",
+      message: "No merge fields found (e.g., {{firstName}}, {{company}})",
+      suggestion: "Add personalization to improve engagement"
+    });
+  }
+
+  // Body length check
+  if (bodyText.trim().length < 50) {
+    issues.push({
+      type: "warning",
+      message: "Email body is very short (less than 50 characters)",
+      suggestion: "Add more content to avoid spam filters"
+    });
+  }
+
+  // Check for images without text
+  const imageCount = (body.match(/<img[^>]*>/gi) || []).length;
+  const textLength = bodyText.trim().length;
+  if (imageCount > 0 && textLength < 100) {
+    issues.push({
+      type: "warning",
+      message: "Email has images but very little text",
+      suggestion: "Add more text content alongside images"
+    });
+  }
+
+  // Check for questions (engagement)
+  const hasQuestion = /[?]/.test(subject) || /[?]/.test(bodyText);
+  if (!hasQuestion) {
+    issues.push({
+      type: "info",
+      message: "Consider asking a question to encourage replies",
+      suggestion: "Questions improve engagement and sender reputation"
+    });
+  }
+
+  // URL shorteners check
+  const urlShorteners = /(bit\.ly|tinyurl|goo\.gl|t\.co|ow\.ly|is\.gd)/i.test(body);
+  if (urlShorteners) {
+    issues.push({
+      type: "warning",
+      message: "Email contains URL shorteners",
+      suggestion: "Use full URLs from reputable domains instead"
+    });
+  }
+
+  // Check for clear call-to-action
+  const ctaWords = ["reply", "respond", "let me know", "get in touch", "schedule", "call"];
+  const hasCTA = ctaWords.some(word => bodyLower.includes(word));
+  if (!hasCTA) {
+    issues.push({
+      type: "info",
+      message: "Consider adding a clear call-to-action",
+      suggestion: "Make it easy for recipients to respond"
+    });
+  }
+
+  return issues;
+};
 
 export const BestPracticesPanel = () => {
+  const composerDraft = useExtensionStore((state) => state.composerDraft);
+  const [showChecker, setShowChecker] = useState(false);
+
+  const issues = useMemo(() => {
+    if (!composerDraft.subjectTemplate && !composerDraft.bodyTemplate) {
+      return [];
+    }
+    return checkEmail(
+      composerDraft.subjectTemplate || "",
+      composerDraft.bodyTemplate || ""
+    );
+  }, [composerDraft.subjectTemplate, composerDraft.bodyTemplate]);
+
+  const hasContent = composerDraft.subjectTemplate || composerDraft.bodyTemplate;
+  const errorCount = issues.filter(i => i.type === "error").length;
+  const warningCount = issues.filter(i => i.type === "warning").length;
+  const infoCount = issues.filter(i => i.type === "info").length;
   return (
     <div
       style={{
@@ -23,6 +161,136 @@ export const BestPracticesPanel = () => {
           Tips to improve deliverability and avoid spam filters
         </p>
       </div>
+
+      {/* Email Checker */}
+      {hasContent && (
+        <section>
+          <div
+            style={{
+              backgroundColor: "#f8f9fa",
+              border: "1px solid #e8eaed",
+              borderRadius: "8px",
+              padding: "16px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "600", color: "#1a73e8" }}>
+                Check Your Email
+              </h2>
+              <Button
+                variant="secondary"
+                onClick={() => setShowChecker(!showChecker)}
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+              >
+                {showChecker ? "Hide" : "Check"}
+              </Button>
+            </div>
+
+            {showChecker && (
+              <div style={{ marginTop: "12px" }}>
+                {issues.length === 0 ? (
+                  <div
+                    style={{
+                      backgroundColor: "#e8f5e9",
+                      border: "1px solid #c8e6c9",
+                      borderRadius: "8px",
+                      padding: "12px",
+                      fontSize: "13px",
+                      color: "#2e7d32",
+                    }}
+                  >
+                    ✅ Your email looks good! No major issues found.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(errorCount > 0 || warningCount > 0 || infoCount > 0) && (
+                      <div style={{ display: "flex", gap: "12px", fontSize: "12px", marginBottom: "8px" }}>
+                        {errorCount > 0 && (
+                          <span style={{ color: "#c62828", fontWeight: "600" }}>
+                            {errorCount} Error{errorCount !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {warningCount > 0 && (
+                          <span style={{ color: "#f57c00", fontWeight: "600" }}>
+                            {warningCount} Warning{warningCount !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {infoCount > 0 && (
+                          <span style={{ color: "#1976d2", fontWeight: "600" }}>
+                            {infoCount} Suggestion{infoCount !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {issues.map((issue, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          backgroundColor:
+                            issue.type === "error"
+                              ? "#ffebee"
+                              : issue.type === "warning"
+                                ? "#fff3e0"
+                                : "#e3f2fd",
+                          border:
+                            issue.type === "error"
+                              ? "1px solid #ffcdd2"
+                              : issue.type === "warning"
+                                ? "1px solid #ffe0b2"
+                                : "1px solid #bbdefb",
+                          borderRadius: "8px",
+                          padding: "12px",
+                          fontSize: "13px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "start",
+                            gap: "8px",
+                          }}
+                        >
+                          <span style={{ fontSize: "16px" }}>
+                            {issue.type === "error" ? "❌" : issue.type === "warning" ? "⚠️" : "💡"}
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <p
+                              style={{
+                                margin: 0,
+                                fontWeight: "600",
+                                color:
+                                  issue.type === "error"
+                                    ? "#c62828"
+                                    : issue.type === "warning"
+                                      ? "#e65100"
+                                      : "#1565c0",
+                              }}
+                            >
+                              {issue.message}
+                            </p>
+                            {issue.suggestion && (
+                              <p
+                                style={{
+                                  margin: "4px 0 0",
+                                  fontSize: "12px",
+                                  color: "#5f6368",
+                                }}
+                              >
+                                💡 {issue.suggestion}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         {/* Account Warm-Up */}
