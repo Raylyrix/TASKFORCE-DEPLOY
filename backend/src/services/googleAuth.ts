@@ -91,7 +91,7 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operation: strin
   ]);
 };
 
-const upsertGoogleCalendarConnection = async ({
+export const upsertGoogleCalendarConnection = async ({
   userId,
   profile,
   accessToken,
@@ -265,23 +265,44 @@ export const upsertGoogleAccount = async (
     });
   }
 
-  // Don't block authentication on calendar connection - make it non-blocking
-  // Calendar connection can be set up later if needed
-  upsertGoogleCalendarConnection({
-    userId: user.id,
-    profile,
-    accessToken,
-    refreshToken,
-    scope,
-    tokenType,
-    expiryDate,
-  }).catch((error) => {
-    logger.error(
-      { error: error instanceof Error ? error.message : String(error), userId: user.id },
-      "Failed to set up calendar connection during authentication - continuing anyway"
+  // Queue calendar connection setup as a background job - don't block authentication
+  // Calendar connection will be set up in the background automatically
+  try {
+    const { calendarConnectionSetupQueue } = await import("../queue/calendarConnectionSetupQueue.js");
+    await calendarConnectionSetupQueue.add(
+      "setup-calendar-connection",
+      {
+        userId: user.id,
+        profile: {
+          email: profile.email,
+          id: profile.id,
+          name: profile.name,
+          picture: profile.picture,
+        },
+        accessToken,
+        refreshToken,
+        scope,
+        tokenType,
+        expiryDate: expiryDate.toISOString(),
+      },
+      {
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 5000,
+        },
+        removeOnComplete: true,
+        removeOnFail: false,
+      }
     );
-    // Don't throw - calendar connection failure shouldn't block authentication
-  });
+    logger.info({ userId: user.id }, "Queued calendar connection setup job");
+  } catch (error) {
+    // If queue is not available, log and continue - authentication should still succeed
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error), userId: user.id },
+      "Failed to queue calendar connection setup job - calendar connection will need to be set up manually"
+    );
+  }
 
   return { user };
 };

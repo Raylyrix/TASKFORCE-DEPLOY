@@ -6,6 +6,7 @@ export enum QueueName {
   CalendarSync = "calendar-sync",
   ScheduledEmail = "scheduled-email",
   SnoozeRestore = "snooze-restore",
+  CalendarConnectionSetup = "calendar-connection-setup",
 }
 
 export type CampaignDispatchJob = {
@@ -54,5 +55,20 @@ export type SnoozeRestoreJob = {
   snoozeId: string;
   messageId: string;
   userId: string;
+};
+
+export type CalendarConnectionSetupJob = {
+  userId: string;
+  profile: {
+    email?: string | null;
+    id?: string | null;
+    name?: string | null;
+    picture?: string | null;
+  };
+  accessToken: string;
+  refreshToken: string;
+  scope: string;
+  tokenType: string;
+  expiryDate: string; // ISO string
 };
 
