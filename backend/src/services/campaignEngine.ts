@@ -41,6 +41,22 @@ import { googleAuthService } from "./googleAuth";
 
 type RecipientRecord = Record<string, string>;
 
+// Convert HTML to plain text (simple version for email deliverability)
+const htmlToText = (html: string): string => {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // Remove style tags
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // Remove script tags
+    .replace(/<[^>]+>/g, "") // Remove HTML tags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ") // Collapse whitespace
+    .trim();
+};
+
 export type SendStrategy = {
   startAt: string;
   delayMsBetweenEmails: number;
@@ -101,6 +117,31 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
     }
     return "";
   });
+};
+
+// Validate and clean subject line to avoid spam triggers
+const cleanSubjectLine = (subject: string): string => {
+  let cleaned = subject.trim();
+  
+  // Remove excessive punctuation
+  cleaned = cleaned.replace(/[!?]{2,}/g, (match) => match[0]); // Keep only one ! or ?
+  
+  // Remove excessive special characters
+  cleaned = cleaned.replace(/[$%#@]{2,}/g, ""); // Remove multiple special chars
+  
+  // Ensure not all caps (spam trigger)
+  const allCaps = cleaned === cleaned.toUpperCase() && cleaned.length > 5;
+  if (allCaps) {
+    // Convert to title case
+    cleaned = cleaned.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+  
+  // Limit length (Gmail truncates at ~70 chars)
+  if (cleaned.length > 70) {
+    cleaned = cleaned.substring(0, 67) + "...";
+  }
+  
+  return cleaned;
 };
 
 const ensureUserHasCredentials = async (userId: string) => {
@@ -348,8 +389,9 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     throw new Error("Email subject is empty after template rendering. Please check your campaign template.");
   }
 
-  // Ensure subject is clean before sending
-  const cleanSubject = finalSubject.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  // Clean subject line to avoid spam triggers
+  let cleanSubject = finalSubject.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  cleanSubject = cleanSubjectLine(cleanSubject);
   
   if (!cleanSubject || cleanSubject.length === 0) {
     logger.error(
@@ -369,6 +411,8 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     to: recipient.email,
     subject: cleanSubject,
     bodyHtml: messageContent.html,
+    bodyText: htmlToText(messageContent.html), // Add plain text version
+    isCampaign: true, // Mark as campaign email for proper headers
   });
 
   await prisma.messageLog.update({
@@ -619,7 +663,9 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     to: recipient.email,
     subject: messageContent.subject,
     bodyHtml: messageContent.html,
+    bodyText: htmlToText(messageContent.html), // Add plain text version
     threadId: sendAsReply ? threadId : null,
+    isCampaign: true, // Mark as campaign email for proper headers
   });
 
   await prisma.messageLog.update({

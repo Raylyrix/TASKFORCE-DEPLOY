@@ -1,5 +1,7 @@
+import { randomBytes } from "crypto";
 import { google } from "googleapis";
 
+import { AppConfig } from "../config/env";
 import { googleAuthService } from "./googleAuth";
 
 type SendEmailInput = {
@@ -7,10 +9,12 @@ type SendEmailInput = {
   to: string;
   subject: string;
   bodyHtml: string;
+  bodyText?: string; // Plain text alternative
   cc?: string[];
   bcc?: string[];
   threadId?: string | null;
   headers?: Record<string, string>;
+  isCampaign?: boolean; // Whether this is a campaign email (affects headers)
 };
 
 const toBase64Url = (input: string) =>
@@ -20,6 +24,30 @@ const toBase64Url = (input: string) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
+// Generate a unique Message-ID
+const generateMessageId = (userEmail: string): string => {
+  const domain = userEmail.split("@")[1] || "gmail.com";
+  const random = randomBytes(16).toString("hex");
+  const timestamp = Date.now();
+  return `<${timestamp}.${random}@${domain}>`;
+};
+
+// Convert HTML to plain text (simple version)
+const htmlToText = (html: string): string => {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // Remove style tags
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // Remove script tags
+    .replace(/<[^>]+>/g, "") // Remove HTML tags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ") // Collapse whitespace
+    .trim();
+};
+
 export const sendEmailViaGmail = async (payload: SendEmailInput) => {
   const authClient = await googleAuthService.getAuthorizedClientForUser(payload.userId);
   const gmail = google.gmail({
@@ -27,20 +55,30 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     auth: authClient,
   });
 
-  // Get user's email for proper From header
-  const userInfo = await authClient.getAccessToken();
-  // Note: Gmail API will automatically set the From header to the authenticated user's email
-  // We don't need to set it manually, but we can add other deliverability headers
+  // Get user's email address
+  const profile = await gmail.users.getProfile({ userId: "me" });
+  const userEmail = profile.data.emailAddress || "";
 
-  const headers = [
+  if (!userEmail) {
+    throw new Error("Unable to retrieve user email address");
+  }
+
+  // Generate Message-ID
+  const messageId = generateMessageId(userEmail);
+  const date = new Date().toUTCString();
+
+  // Create plain text version if not provided
+  const bodyText = payload.bodyText || htmlToText(payload.bodyHtml);
+
+  // Build headers - CRITICAL: Don't use spam-triggering headers
+  const headers: Array<[string, string]> = [
+    ["Date", date],
+    ["Message-ID", messageId],
     ["To", payload.to],
+    ["From", userEmail],
+    ["Reply-To", userEmail], // Important: Set Reply-To to user's email
     ["Subject", payload.subject],
-    ["Content-Type", 'text/html; charset="UTF-8"'],
     ["MIME-Version", "1.0"],
-    // Deliverability best practices
-    ["Precedence", "bulk"], // Indicates bulk email (helps with filtering)
-    ["X-Auto-Response-Suppress", "All"], // Prevents auto-replies
-    ["Auto-Submitted", "auto-generated"], // Indicates automated email
   ];
 
   if (payload.cc?.length) {
@@ -50,20 +88,62 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     headers.push(["Bcc", payload.bcc.join(", ")]);
   }
 
+  // For campaign emails, add List-Unsubscribe header (required by Gmail for bulk emails)
+  if (payload.isCampaign) {
+    // Use mailto: for unsubscribe (Gmail prefers this)
+    const unsubscribeUrl = `${AppConfig.publicUrl}/api/campaigns/unsubscribe?email={{email}}&token={{token}}`;
+    headers.push([
+      "List-Unsubscribe",
+      `<mailto:unsubscribe@${userEmail.split("@")[1] || "gmail.com"}>, <${unsubscribeUrl}>`,
+    ]);
+    headers.push(["List-Unsubscribe-Post", "List-Unsubscribe=One-Click"]);
+  }
+
+  // Add X- headers for better deliverability (but avoid spam triggers)
+  headers.push(["X-Mailer", "TaskForce Campaign Manager"]);
+  
+  // Only suppress auto-responses if this is a campaign (not personal emails)
+  if (payload.isCampaign) {
+    headers.push(["X-Auto-Response-Suppress", "All"]);
+  }
+
   // Add custom headers if provided
   if (payload.headers) {
     for (const [key, value] of Object.entries(payload.headers)) {
       // Don't override critical headers
       const lowerKey = key.toLowerCase();
-      if (!["to", "from", "subject", "content-type", "mime-version"].includes(lowerKey)) {
+      if (
+        !["to", "from", "subject", "content-type", "mime-version", "date", "message-id", "reply-to"].includes(
+          lowerKey,
+        )
+      ) {
         headers.push([key, value]);
       }
     }
   }
 
-  const message = `${headers.map(([key, value]) => `${key}: ${value}`).join("\r\n")}\r\n\r\n${
-    payload.bodyHtml
-  }`;
+  // Build multipart message with both HTML and plain text
+  const boundary = `----=_Part_${Date.now()}_${randomBytes(8).toString("hex")}`;
+  
+  const multipartBody = [
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    bodyText,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    payload.bodyHtml,
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  const message = `${headers.map(([key, value]) => `${key}: ${value}`).join("\r\n")}\r\n${multipartBody}`;
 
   const raw = toBase64Url(message);
 
