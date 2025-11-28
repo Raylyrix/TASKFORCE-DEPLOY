@@ -199,23 +199,103 @@ export const FollowUpOverlay = () => {
                   </Button>
                 </div>
 
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                  <label style={{ width: "160px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 600 }}>Delay (hours)</span>
+                {/* Scheduling Mode Toggle */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                     <input
-                      type="number"
-                      min={0}
-                      value={Math.round(step.delayMs / 3600000)}
-                      onChange={(event) =>
-                        handleStepChange(index, { delayMs: Number(event.target.value) * 3600000 })
-                      }
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid #dadce0",
-                      }}
+                      type="radio"
+                      name={`schedule-mode-${index}`}
+                      checked={!step.useDateTime}
+                      onChange={() => handleStepChange(index, { useDateTime: false })}
+                      style={{ cursor: "pointer" }}
                     />
+                    <span style={{ fontSize: "12px", fontWeight: 600 }}>Delay (hours/days)</span>
                   </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name={`schedule-mode-${index}`}
+                      checked={step.useDateTime ?? false}
+                      onChange={() => handleStepChange(index, { useDateTime: true })}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: "12px", fontWeight: 600 }}>Specific Date & Time</span>
+                  </label>
+                </div>
+
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  {step.useDateTime ? (
+                    <label style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600 }}>Send at (Date & Time)</span>
+                      <input
+                        type="datetime-local"
+                        value={
+                          step.scheduledAt
+                            ? new Date(step.scheduledAt).toISOString().slice(0, 16)
+                            : new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().slice(0, 16)
+                        }
+                        onChange={(event) => {
+                          const dateTime = event.target.value;
+                          if (dateTime) {
+                            const scheduledAt = new Date(dateTime).toISOString();
+                            handleStepChange(index, { scheduledAt });
+                          }
+                        }}
+                        min={new Date().toISOString().slice(0, 16)}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: "8px",
+                          border: "1px solid #dadce0",
+                        }}
+                      />
+                      <span style={{ fontSize: "11px", color: "#5f6368" }}>
+                        Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                      </span>
+                    </label>
+                  ) : (
+                    <>
+                      <label style={{ width: "120px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600 }}>Delay (hours)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={step.delayMs ? Math.round((step.delayMs / 3600000) * 10) / 10 : 48}
+                          onChange={(event) => {
+                            const hours = Number(event.target.value);
+                            const delayMs = hours * 3600000;
+                            handleStepChange(index, { delayMs });
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: "8px",
+                            border: "1px solid #dadce0",
+                          }}
+                          placeholder="48"
+                        />
+                      </label>
+                      <label style={{ width: "120px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600 }}>Or (days)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={step.delayMs ? Math.round((step.delayMs / (24 * 3600000)) * 10) / 10 : 2}
+                          onChange={(event) => {
+                            const days = Number(event.target.value);
+                            const delayMs = days * 24 * 3600000;
+                            handleStepChange(index, { delayMs });
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: "8px",
+                            border: "1px solid #dadce0",
+                          }}
+                          placeholder="2"
+                        />
+                      </label>
+                    </>
+                  )}
 
                   <label style={{ flex: "1 1 260px", display: "flex", flexDirection: "column", gap: "6px" }}>
                     <span style={{ fontSize: "12px", fontWeight: 600 }}>Subject</span>

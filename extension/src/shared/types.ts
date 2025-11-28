@@ -30,7 +30,9 @@ export type CampaignMetrics = {
 };
 
 export type FollowUpStepDraft = {
-  delayMs: number;
+  delayMs?: number; // Relative delay in milliseconds (hours * 3600000)
+  scheduledAt?: string; // Absolute scheduled date/time (ISO 8601)
+  useDateTime?: boolean; // true = use date/time, false = use hours delay
   subject: string;
   html: string;
   sendAsReply?: boolean;

@@ -9,13 +9,17 @@ import { campaignEngine } from "../../services/campaignEngine";
 export const followUpsRouter = Router();
 
 const followUpStepSchema = z.object({
-  delayMs: z.number().int().min(0),
+  delayMs: z.number().int().min(0).optional(), // Relative delay in milliseconds
+  scheduledAt: z.string().datetime().optional(), // Absolute scheduled date/time (ISO 8601)
   subject: z.string().min(1),
   html: z.string().min(1),
   sendAsReply: z.boolean().optional().default(false),
   parentStepId: z.string().optional(),
   isNested: z.boolean().optional().default(false),
-});
+}).refine(
+  (data) => data.delayMs !== undefined || data.scheduledAt !== undefined,
+  { message: "Either delayMs or scheduledAt must be provided" }
+);
 
 const createFollowUpSchema = z.object({
   campaignId: z.string().min(1),

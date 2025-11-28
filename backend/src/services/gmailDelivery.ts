@@ -27,11 +27,20 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     auth: authClient,
   });
 
+  // Get user's email for proper From header
+  const userInfo = await authClient.getAccessToken();
+  // Note: Gmail API will automatically set the From header to the authenticated user's email
+  // We don't need to set it manually, but we can add other deliverability headers
+
   const headers = [
     ["To", payload.to],
     ["Subject", payload.subject],
     ["Content-Type", 'text/html; charset="UTF-8"'],
     ["MIME-Version", "1.0"],
+    // Deliverability best practices
+    ["Precedence", "bulk"], // Indicates bulk email (helps with filtering)
+    ["X-Auto-Response-Suppress", "All"], // Prevents auto-replies
+    ["Auto-Submitted", "auto-generated"], // Indicates automated email
   ];
 
   if (payload.cc?.length) {
@@ -41,9 +50,14 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     headers.push(["Bcc", payload.bcc.join(", ")]);
   }
 
+  // Add custom headers if provided
   if (payload.headers) {
     for (const [key, value] of Object.entries(payload.headers)) {
-      headers.push([key, value]);
+      // Don't override critical headers
+      const lowerKey = key.toLowerCase();
+      if (!["to", "from", "subject", "content-type", "mime-version"].includes(lowerKey)) {
+        headers.push([key, value]);
+      }
     }
   }
 

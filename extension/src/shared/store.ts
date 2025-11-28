@@ -101,20 +101,26 @@ const cloneFollowUpSequence = (sequence: FollowUpSequenceDraft): FollowUpSequenc
   steps: sequence.steps.map((step) => ({ ...step })),
 });
 
-const createDefaultFollowUpSequence = (): FollowUpSequenceDraft => ({
-  name: "Follow-up Sequence",
-  steps: [
-    {
-      delayMs: 48 * 60 * 60 * 1000,
-      subject: "Circling back on {{company}}",
-      html: `<p>Hi {{firstName}},</p>
+const createDefaultFollowUpSequence = (): FollowUpSequenceDraft => {
+  const defaultDelay = 48 * 60 * 60 * 1000; // 48 hours
+  const defaultScheduledAt = new Date(Date.now() + defaultDelay).toISOString();
+  return {
+    name: "Follow-up Sequence",
+    steps: [
+      {
+        delayMs: defaultDelay,
+        scheduledAt: defaultScheduledAt,
+        useDateTime: false,
+        subject: "Circling back on {{company}}",
+        html: `<p>Hi {{firstName}},</p>
 <p>Just checking whether you had a chance to review my earlier note.</p>
 <p>Thanks!<br/>{{senderName}}</p>`,
-      sendAsReply: false,
-      isNested: false,
-    },
-  ],
-});
+        sendAsReply: false,
+        isNested: false,
+      },
+    ],
+  };
+};
 
 const createDefaultDraft = (): ComposerDraft => ({
   campaignName: "New Gmail Campaign",

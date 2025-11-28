@@ -192,21 +192,65 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
     for (const step of sequence.steps) {
       const stepOffset = (step.offsetConfig as { 
         delayMs?: number;
+        scheduledAt?: string; // ISO date string for absolute scheduling
         condition?: "always" | "if_not_opened" | "if_not_replied" | "if_not_clicked";
       }) ?? {};
       
-      const scheduledAt = addMilliseconds(baseDate, stepOffset.delayMs ?? 0);
+      // Calculate scheduled time: use absolute scheduledAt if provided, otherwise use relative delayMs
+      let scheduledAt: Date;
+      if (stepOffset.scheduledAt) {
+        scheduledAt = new Date(stepOffset.scheduledAt);
+        // Ensure scheduledAt is in the future
+        const now = new Date();
+        if (isBefore(scheduledAt, now)) {
+          scheduledAt = addMilliseconds(now, stepOffset.delayMs ?? 48 * 60 * 60 * 1000);
+        }
+      } else {
+        const delayMs = stepOffset.delayMs ?? 48 * 60 * 60 * 1000; // Default 48 hours
+        scheduledAt = addMilliseconds(baseDate, delayMs);
+      }
       
-      await followUpQueue.add("send-follow-up", {
-        followUpSequenceId: sequence.id,
-        followUpStepId: step.id,
-        recipientId,
-        scheduledAt: scheduledAt.toISOString(),
-        attempt: 1,
-        condition: stepOffset.condition ?? "always",
-        stopOnReply: sequenceSettings.stopOnReply ?? false,
-        stopOnOpen: sequenceSettings.stopOnOpen ?? false,
-      });
+      // Calculate delay in milliseconds from now
+      const now = new Date();
+      const delayMs = Math.max(0, scheduledAt.getTime() - now.getTime());
+      
+      // Ensure minimum delay of 1 minute to prevent immediate sending
+      const minDelayMs = 60 * 1000; // 1 minute
+      const finalDelayMs = Math.max(minDelayMs, delayMs);
+      
+      logger.info(
+        {
+          campaignId,
+          recipientId,
+          followUpStepId: step.id,
+          scheduledAt: scheduledAt.toISOString(),
+          delayMs: finalDelayMs,
+          delayHours: Math.round(finalDelayMs / (60 * 60 * 1000) * 100) / 100,
+        },
+        "Scheduling follow-up"
+      );
+      
+      await followUpQueue.add(
+        "send-follow-up",
+        {
+          followUpSequenceId: sequence.id,
+          followUpStepId: step.id,
+          recipientId,
+          scheduledAt: scheduledAt.toISOString(),
+          attempt: 1,
+          condition: stepOffset.condition ?? "always",
+          stopOnReply: sequenceSettings.stopOnReply ?? false,
+          stopOnOpen: sequenceSettings.stopOnOpen ?? false,
+        },
+        {
+          delay: finalDelayMs, // BullMQ delay option - this is critical!
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 5000,
+          },
+        },
+      );
     }
   }
 };
@@ -736,6 +780,7 @@ const createFollowUpSequence = async (campaignId: string, config: FollowUpSequen
           order: index,
           offsetConfig: {
             delayMs: step.delayMs,
+            scheduledAt: step.scheduledAt, // Store absolute scheduled time if provided
             sendAsReply: step.sendAsReply ?? false,
             parentStepId: step.parentStepId,
             isNested: step.isNested ?? false,
