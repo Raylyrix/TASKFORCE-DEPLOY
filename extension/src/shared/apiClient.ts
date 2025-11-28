@@ -39,8 +39,23 @@ export const apiClient = {
         useExtensionStore.getState().setUser(null);
         throw new Error("Authentication expired. Please re-authenticate.");
       }
-      const errorText = await response.text();
-      throw new Error(errorText || `Request failed with status ${response.status}`);
+      
+      // Try to parse JSON error response
+      let errorMessage: string;
+      try {
+        const contentType = response.headers.get("content-type");
+        if (contentType?.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
+        } else {
+          const errorText = await response.text();
+          errorMessage = errorText || `Request failed with status ${response.status}`;
+        }
+      } catch {
+        errorMessage = `Request failed with status ${response.status}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     if (response.status === 204) {
