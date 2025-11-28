@@ -236,8 +236,8 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
 
     for (const step of sequence.steps) {
       const stepOffset = (step.offsetConfig as { 
-        delayMs?: number;
-        scheduledAt?: string; // ISO date string for absolute scheduling
+        delayMs?: number | null;
+        scheduledAt?: string | null; // ISO date string for absolute scheduling
         condition?: "always" | "if_not_opened" | "if_not_replied" | "if_not_clicked";
       }) ?? {};
       
@@ -248,10 +248,43 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
         // Ensure scheduledAt is in the future
         const now = new Date();
         if (isBefore(scheduledAt, now)) {
-          scheduledAt = addMilliseconds(now, stepOffset.delayMs ?? 48 * 60 * 60 * 1000);
+          // If scheduledAt is in the past, fall back to delayMs or default
+          const fallbackDelayMs = (stepOffset.delayMs != null && stepOffset.delayMs >= 0) 
+            ? stepOffset.delayMs 
+            : 48 * 60 * 60 * 1000;
+          scheduledAt = addMilliseconds(now, fallbackDelayMs);
+          logger.warn(
+            {
+              campaignId,
+              recipientId,
+              followUpStepId: step.id,
+              originalScheduledAt: stepOffset.scheduledAt,
+              fallbackDelayMs,
+            },
+            "scheduledAt was in the past, using delayMs fallback"
+          );
         }
       } else {
-        const delayMs = stepOffset.delayMs ?? 48 * 60 * 60 * 1000; // Default 48 hours
+        // Use delayMs if it's a valid number (not null, not undefined, >= 0)
+        // If delayMs is missing or invalid, log a warning and use default
+        const delayMs = (stepOffset.delayMs != null && stepOffset.delayMs >= 0)
+          ? stepOffset.delayMs
+          : 48 * 60 * 60 * 1000; // Default 48 hours
+        
+        if (stepOffset.delayMs == null || stepOffset.delayMs < 0) {
+          logger.warn(
+            {
+              campaignId,
+              recipientId,
+              followUpStepId: step.id,
+              storedDelayMs: stepOffset.delayMs,
+              usingDefault: true,
+              defaultDelayMs: 48 * 60 * 60 * 1000,
+            },
+            "delayMs is missing or invalid in offsetConfig, using 48-hour default"
+          );
+        }
+        
         scheduledAt = addMilliseconds(baseDate, delayMs);
       }
       
@@ -271,6 +304,10 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
           scheduledAt: scheduledAt.toISOString(),
           delayMs: finalDelayMs,
           delayHours: Math.round(finalDelayMs / (60 * 60 * 1000) * 100) / 100,
+          storedDelayMs: stepOffset.delayMs,
+          storedScheduledAt: stepOffset.scheduledAt,
+          baseDate: baseDate.toISOString(),
+          calculatedFromBase: !stepOffset.scheduledAt,
         },
         "Scheduling follow-up"
       );
@@ -1064,10 +1101,12 @@ const createFollowUpSequence = async (campaignId: string, config: FollowUpSequen
         create: config.steps.map((step, index) => ({
           order: index,
           offsetConfig: {
-            delayMs: step.delayMs,
-            scheduledAt: step.scheduledAt, // Store absolute scheduled time if provided
+            // Only include delayMs if it's a valid number (not undefined, not null, >= 0)
+            ...(step.delayMs != null && step.delayMs >= 0 ? { delayMs: step.delayMs } : {}),
+            // Only include scheduledAt if provided
+            ...(step.scheduledAt ? { scheduledAt: step.scheduledAt } : {}),
             sendAsReply: step.sendAsReply ?? false,
-            parentStepId: step.parentStepId,
+            ...(step.parentStepId ? { parentStepId: step.parentStepId } : {}),
             isNested: step.isNested ?? false,
           },
           templateSubject: step.subject,
