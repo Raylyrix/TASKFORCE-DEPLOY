@@ -521,10 +521,14 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
   const sendAsReply = offsetConfig?.sendAsReply ?? false;
   
-  // Get threadId for reply if needed
+  // Get threadId and Message-ID for reply if needed
   let threadId: string | null = null;
+  let inReplyTo: string | null = null;
+  let references: string | null = null;
+  let replySubject: string | null = null;
+  
   if (sendAsReply && originalMessage?.gmailMessageId) {
-    // Fetch the Gmail message to get threadId
+    // Fetch the Gmail message to get threadId and Message-ID
     try {
       const authClient = await googleAuthService.getAuthorizedClientForUser(step.sequence.campaign.userId);
       const { google } = await import("googleapis");
@@ -536,15 +540,46 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       const gmailMessage = await gmail.users.messages.get({
         userId: "me",
         id: originalMessage.gmailMessageId,
-        format: "minimal",
+        format: "metadata",
+        metadataHeaders: ["Message-ID", "Subject", "References"],
       });
       
       threadId = gmailMessage.data.threadId ?? null;
       
-      if (threadId) {
+      // Extract Message-ID and References from headers
+      const headers = (gmailMessage.data.payload?.headers ?? []).reduce(
+        (acc, header) => {
+          if (header.name && header.value) {
+            acc[header.name.toLowerCase()] = header.value;
+          }
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
+      
+      const originalMessageId = headers["message-id"];
+      const originalReferences = headers["references"];
+      const originalSubject = headers["subject"] || "";
+      
+      if (originalMessageId) {
+        inReplyTo = originalMessageId;
+        // Build References header: original References + original Message-ID
+        references = originalReferences 
+          ? `${originalReferences} ${originalMessageId}`
+          : originalMessageId;
+      }
+      
+      // Format reply subject
+      if (originalSubject && !originalSubject.startsWith("Re:")) {
+        replySubject = `Re: ${originalSubject}`;
+      } else {
+        replySubject = originalSubject;
+      }
+      
+      if (threadId && inReplyTo) {
         logger.info(
-          { recipientId: recipient.id, followUpStepId: step.id, threadId },
-          "Found threadId for reply follow-up"
+          { recipientId: recipient.id, followUpStepId: step.id, threadId, inReplyTo },
+          "Found threadId and Message-ID for reply follow-up"
         );
       }
     } catch (error) {
@@ -658,20 +693,25 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     payload,
   );
 
+  // Use reply subject if this is a reply, otherwise use the template subject
+  const finalSubject = sendAsReply && replySubject ? replySubject : messageContent.subject;
+
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: step.sequence.campaign.userId,
     to: recipient.email,
-    subject: messageContent.subject,
+    subject: finalSubject,
     bodyHtml: messageContent.html,
     bodyText: htmlToText(messageContent.html), // Add plain text version
     threadId: sendAsReply ? threadId : null,
+    inReplyTo: sendAsReply ? inReplyTo : null,
+    references: sendAsReply ? references : null,
     isCampaign: true, // Mark as campaign email for proper headers
   });
 
   await prisma.messageLog.update({
     where: { id: messageLog.id },
     data: {
-      subject: messageContent.subject,
+      subject: finalSubject,
       status: MessageStatus.SENT,
       sendAt: new Date(),
       gmailMessageId: sendResult.id,

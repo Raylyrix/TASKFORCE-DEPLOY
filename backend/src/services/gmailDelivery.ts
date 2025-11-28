@@ -15,6 +15,8 @@ type SendEmailInput = {
   threadId?: string | null;
   headers?: Record<string, string>;
   isCampaign?: boolean; // Whether this is a campaign email (affects headers)
+  inReplyTo?: string | null; // Message-ID of the message being replied to
+  references?: string | null; // References header for threading
 };
 
 const toBase64Url = (input: string) =>
@@ -88,16 +90,17 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     headers.push(["Bcc", payload.bcc.join(", ")]);
   }
 
-  // For campaign emails, add List-Unsubscribe header (required by Gmail for bulk emails)
-  if (payload.isCampaign) {
-    // Use mailto: for unsubscribe (Gmail prefers this)
-    const unsubscribeUrl = `${AppConfig.publicUrl}/api/campaigns/unsubscribe?email={{email}}&token={{token}}`;
-    headers.push([
-      "List-Unsubscribe",
-      `<mailto:unsubscribe@${userEmail.split("@")[1] || "gmail.com"}>, <${unsubscribeUrl}>`,
-    ]);
-    headers.push(["List-Unsubscribe-Post", "List-Unsubscribe=One-Click"]);
+  // Add reply headers if this is a reply
+  if (payload.inReplyTo) {
+    headers.push(["In-Reply-To", payload.inReplyTo]);
   }
+  if (payload.references) {
+    headers.push(["References", payload.references]);
+  }
+
+  // Note: List-Unsubscribe header removed temporarily to avoid spam triggers
+  // The placeholder URLs ({{email}}, {{token}}) were triggering Gmail's phishing detection
+  // TODO: Re-add when proper unsubscribe endpoint is implemented with real email/token values
 
   // Add X- headers for better deliverability (but avoid spam triggers)
   headers.push(["X-Mailer", "TaskForce Campaign Manager"]);
