@@ -9,6 +9,7 @@ import { AuthCard } from "../components/AuthCard";
 import { ComposerPanel } from "../components/ComposerPanel";
 import { FollowUpPanel } from "../components/FollowUpPanel";
 import { CampaignsPanel } from "../components/CampaignsPanel";
+import { BestPracticesPanel } from "../components/BestPracticesPanel";
 import { TabSwitcher } from "../components/TabSwitcher";
 import { UserMenu } from "../components/UserMenu";
 
@@ -30,6 +31,12 @@ export const App = ({ forcedTab, hideTabs }: AppProps) => (
 export const ComposerApp = () => <App forcedTab="composer" hideTabs />;
 
 export const FollowUpApp = () => <App forcedTab="followUps" hideTabs />;
+
+export const BestPracticesApp = () => (
+  <QueryClientProvider client={queryClient}>
+    <BestPracticesPanel />
+  </QueryClientProvider>
+);
 
 const Content = ({ forcedTab, hideTabs }: AppProps) => {
   const { backendUrl, isLoading: backendLoading } = useBackendConfig();

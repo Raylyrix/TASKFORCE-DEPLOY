@@ -1,9 +1,10 @@
 import { createRoot, type Root } from "react-dom/client";
 
-import { ComposerApp, FollowUpApp } from "./App";
+import { ComposerApp, FollowUpApp, BestPracticesApp } from "./App";
 
 const FLOATING_COMPOSER_ID = "taskforce-floating-composer";
 const FLOATING_FOLLOWUPS_ID = "taskforce-floating-followups";
+const FLOATING_BEST_PRACTICES_ID = "taskforce-floating-best-practices";
 const STORAGE_KEY = "taskforce-floating-window-state";
 
 type WindowConfig = {
@@ -73,6 +74,18 @@ const windowConfigs: WindowConfig[] = [
     allowMultiple: false,
     contentId: "taskforce-floating-followups-content",
     render: (root) => root.render(<FollowUpApp />),
+  },
+  {
+    id: FLOATING_BEST_PRACTICES_ID,
+    title: "Email Best Practices",
+    initialPosition: { x: 200, y: 100 },
+    initialSize: { width: 600, height: 700 },
+    defaultVisible: false,
+    sidebarLabel: "Best Practices",
+    sidebarIcon: "📚",
+    allowMultiple: false,
+    contentId: "taskforce-floating-best-practices-content",
+    render: (root) => root.render(<BestPracticesApp />),
   },
 ];
 
@@ -548,10 +561,25 @@ const setWindowVisibility = (instanceId: string, visible: boolean) => {
   reflowMinimizedWindows();
 };
 
-const toggleWindowVisibility = (instanceId: string) => {
-  const state = windowState[instanceId];
-  if (!state) return;
-  setWindowVisibility(instanceId, !state.visible);
+const toggleWindowVisibility = (configId: string) => {
+  const existing = Object.values(windowState).find((state) => state.configId === configId && state.visible);
+  if (existing) {
+    setWindowVisibility(existing.instanceId, false);
+    return;
+  }
+  const config = configById.get(configId);
+  if (!config) return;
+  const existingState = Object.values(windowState).find((state) => state.configId === configId);
+  if (existingState) {
+    setWindowVisibility(existingState.instanceId, true);
+  } else {
+    spawnWindow(config);
+  }
+};
+
+// Expose function to open windows from React components
+(window as any).__taskforceOpenWindow = (configId: string) => {
+  toggleWindowVisibility(configId);
 };
 
 const setWindowMinimized = (instanceId: string, minimized: boolean) => {
