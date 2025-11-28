@@ -901,6 +901,112 @@ export const api = {
         method: "POST",
         body: { campaignId, ...data },
       }),
+    // Follow-up Automations (Gmail-based)
+    listAutomations: () =>
+      apiRequest<{
+        automations: Array<{
+          id: string;
+          userId: string;
+          target: { type: "label" | "query" | "folder"; labelIds?: string[]; query?: string; folderId?: string };
+          timezone: string;
+          rules: Array<{
+            id: string;
+            name: string;
+            schedule: {
+              mode: "relative" | "absolute" | "weekly";
+              sendAfterDays?: number;
+              sendAfterHours?: number;
+              sendAt?: string;
+              daysOfWeek?: string[];
+              sendTime?: string;
+              timezone: string;
+            };
+            conditions: Array<{
+              id: string;
+              field: "noReplySince" | "hasLabel" | "threadStatus" | "manualTag";
+              operator: "gt" | "lt" | "includes" | "excludes" | "equals";
+              value: string;
+              unit?: "hours" | "days";
+            }>;
+            actions: Array<{
+              id: string;
+              type: "sendEmail" | "applyLabel" | "stopSequence";
+              subject?: string;
+              bodyHtml?: string;
+              labelId?: string;
+            }>;
+            stopConditions?: {
+              onReply: boolean;
+              onOpen: boolean;
+              onClick: boolean;
+            };
+            maxFollowUps?: number | null;
+            isActive: boolean;
+          }>;
+          createdAt: string;
+          updatedAt: string;
+          nextRunAt: string | null;
+          lastRunAt: string | null;
+        }>;
+      }>("/api/follow-ups/automations"),
+    createAutomation: (data: {
+      target: { type: "label" | "query" | "folder"; labelIds?: string[]; query?: string; folderId?: string };
+      timezone: string;
+      rules: Array<{
+        name: string;
+        schedule: {
+          mode: "relative" | "absolute" | "weekly";
+          sendAfterDays?: number;
+          sendAfterHours?: number;
+          sendAt?: string;
+          daysOfWeek?: string[];
+          sendTime?: string;
+          timezone: string;
+        };
+        conditions: Array<{
+          field: "noReplySince" | "hasLabel" | "threadStatus" | "manualTag";
+          operator: "gt" | "lt" | "includes" | "excludes" | "equals";
+          value: string;
+          unit?: "hours" | "days";
+        }>;
+        actions: Array<{
+          type: "sendEmail" | "applyLabel" | "stopSequence";
+          subject?: string;
+          bodyHtml?: string;
+          labelId?: string;
+        }>;
+        stopConditions?: {
+          onReply: boolean;
+          onOpen: boolean;
+          onClick: boolean;
+        };
+        maxFollowUps?: number | null;
+        isActive: boolean;
+      }>;
+    }) =>
+      apiRequest<{
+        automation: {
+          id: string;
+          userId: string;
+          target: { type: "label" | "query" | "folder"; labelIds?: string[]; query?: string; folderId?: string };
+          timezone: string;
+          rules: Array<{
+            id: string;
+            name: string;
+            schedule: any;
+            conditions: Array<any>;
+            actions: Array<any>;
+            stopConditions?: any;
+            maxFollowUps?: number | null;
+            isActive: boolean;
+          }>;
+          createdAt: string;
+          updatedAt: string;
+        };
+      }>("/api/follow-ups/automations", {
+        method: "POST",
+        body: data,
+      }),
   },
 
   // AI (Ollama)
