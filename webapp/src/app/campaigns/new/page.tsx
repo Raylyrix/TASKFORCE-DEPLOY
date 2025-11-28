@@ -66,10 +66,34 @@ export default function NewCampaignPage() {
     mutationFn: (url: string) => api.sheets.import(url),
     onSuccess: (data) => {
       // Transform the response to match what we expect
+      // Ensure columns is always an array of strings
+      const columns = Array.isArray(data.sheetSource?.columns) 
+        ? data.sheetSource.columns 
+        : Array.isArray(data.headers) 
+        ? data.headers 
+        : [];
+      
+      // Ensure rows is always an array
+      const rows = Array.isArray(data.records) ? data.records : [];
+      
       const transformed = {
-        columns: data.sheetSource?.columns || data.headers || [],
-        rows: data.records || [],
-        rowCount: data.records?.length || 0,
+        columns: columns.map((col: any) => String(col)), // Ensure all columns are strings
+        rows: rows.map((row: any) => {
+          // Ensure all row values are strings or primitives
+          const cleanRow: Record<string, string> = {};
+          Object.keys(row || {}).forEach((key) => {
+            const value = row[key];
+            if (value === null || value === undefined) {
+              cleanRow[key] = "";
+            } else if (typeof value === "object") {
+              cleanRow[key] = JSON.stringify(value);
+            } else {
+              cleanRow[key] = String(value);
+            }
+          });
+          return cleanRow;
+        }),
+        rowCount: rows.length,
       };
       setImportResult(transformed);
       if (transformed.columns && transformed.columns.length > 0) {
@@ -80,16 +104,41 @@ export default function NewCampaignPage() {
         setEmailField(emailCol);
       }
     },
+    onError: (error: any) => {
+      console.error("Import error:", error);
+      alert(error?.message || "Failed to import sheet. Please check the URL and try again.");
+    },
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!importResult || !emailField) throw new Error("Missing recipients");
       
-      const recipients = importResult.rows.map((row: Record<string, string>) => ({
-        email: row[emailField],
-        payload: row,
-      }));
+      // Validate email field exists in rows
+      const validRecipients = importResult.rows
+        .map((row: Record<string, string>) => {
+          const email = row[emailField]?.trim();
+          if (!email || !email.includes("@")) {
+            return null;
+          }
+          return {
+            email,
+            payload: row,
+          };
+        })
+        .filter((r): r is { email: string; payload: Record<string, string> } => r !== null);
+
+      if (validRecipients.length === 0) {
+        throw new Error("No valid email addresses found in the selected column. Please check your data.");
+      }
+
+      if (!subjectTemplate.trim()) {
+        throw new Error("Email subject is required.");
+      }
+
+      if (!bodyTemplate.trim()) {
+        throw new Error("Email body is required.");
+      }
 
       return api.campaigns.create({
         name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
@@ -103,16 +152,26 @@ export default function NewCampaignPage() {
           trackOpens,
           trackClicks,
           template: {
-            subject: subjectTemplate,
-            html: bodyTemplate,
+            subject: subjectTemplate.trim(),
+            html: bodyTemplate.trim(),
           },
         },
       });
     },
     onSuccess: async (data) => {
-      // Schedule the campaign
-      await api.campaigns.schedule(data.id, new Date(startAt).toISOString());
-      router.push(`/campaigns/${data.id}`);
+      try {
+        // Schedule the campaign
+        await api.campaigns.schedule(data.id, new Date(startAt).toISOString());
+        router.push(`/campaigns/${data.id}`);
+      } catch (error: any) {
+        console.error("Schedule error:", error);
+        alert(error?.message || "Campaign created but failed to schedule. Please schedule it manually.");
+        router.push(`/campaigns/${data.id}`);
+      }
+    },
+    onError: (error: any) => {
+      console.error("Create campaign error:", error);
+      alert(error?.message || "Failed to create campaign. Please check all fields and try again.");
     },
   });
 
@@ -170,8 +229,15 @@ export default function NewCampaignPage() {
 
   // Preview rendering
   const previewData = importResult?.rows?.[0] || {};
-  const previewSubject = subjectTemplate.replace(/{{\s*([^}]+)\s*}}/g, (_, key) => previewData[key.trim()] || "");
-  const previewBody = bodyTemplate.replace(/{{\s*([^}]+)\s*}}/g, (_, key) => previewData[key.trim()] || "");
+  // Helper to safely convert values to strings (prevents React error #31)
+  const getPreviewValue = (key: string): string => {
+    const value = previewData[key.trim()];
+    if (value === null || value === undefined) return "";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
+  const previewSubject = subjectTemplate.replace(/{{\s*([^}]+)\s*}}/g, (_, key) => getPreviewValue(key));
+  const previewBody = bodyTemplate.replace(/{{\s*([^}]+)\s*}}/g, (_, key) => getPreviewValue(key));
 
   return (
     <Layout>

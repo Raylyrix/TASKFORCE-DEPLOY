@@ -82,3 +82,34 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Ensure links are visible - make them dark/blue instead of white */
+.email-body a,
+.prose a {
+  color: #2563eb !important;
+  text-decoration: underline;
+}
+
+.email-body a:visited,
+.prose a:visited {
+  color: #7c3aed !important;
+}
+
+.email-body a:hover,
+.prose a:hover {
+  color: #1d4ed8 !important;
+  text-decoration: underline;
+}
+
+/* Ensure all links in the app are visible */
+a {
+  color: #2563eb;
+}
+
+a:visited {
+  color: #7c3aed;
+}
+
+a:hover {
+  color: #1d4ed8;
+}
+
