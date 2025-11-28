@@ -25,7 +25,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install production dependencies including prisma for migrations
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN npm ci --only=production && npm install prisma --save
 
 # Copy built files and Prisma
@@ -33,8 +33,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy startup script
-COPY start.sh ./start.sh
+# Copy startup script from backend directory
+COPY backend/start.sh ./start.sh
 RUN chmod +x ./start.sh
 
 # Create non-root user and ensure it owns the app directory
