@@ -42,7 +42,7 @@ const exchangeSchema = z.object({
 });
 
 // GET callback route - Google redirects here after OAuth
-authRouter.get("/google/callback", (req, res) => {
+authRouter.get("/google/callback", async (req, res) => {
   const { code, state, error, source } = req.query;
   
   // Detect if this is from extension using multiple methods:
@@ -278,16 +278,50 @@ authRouter.get("/google/callback", (req, res) => {
     `);
   }
 
-  // Otherwise redirect to webapp callback page with code and state
+  // For webapp: Handle exchange directly in GET callback to avoid extra round-trip
+  // This prevents hanging and simplifies the flow
   const webappUrl = process.env.RAILWAY_SERVICE_TASKFORCE_WEBAPP_URL 
     ? `https://${process.env.RAILWAY_SERVICE_TASKFORCE_WEBAPP_URL}`
     : "https://taskforce-webapp-production.up.railway.app";
-  
-  const params = new URLSearchParams();
-  if (code) params.set("code", code as string);
-  if (state) params.set("state", state as string);
-  
-  res.redirect(`${webappUrl}/auth/callback?${params.toString()}`);
+
+  if (!code || !state) {
+    return res.redirect(`${webappUrl}/auth/callback?error=${encodeURIComponent("Missing authentication parameters")}`);
+  }
+
+  // Exchange code for tokens directly in GET callback (for webapp only)
+  try {
+    const stateEntry = oauthStateStore.consume(state as string);
+    if (!stateEntry) {
+      logger.warn({ state }, "Invalid or expired OAuth state in webapp callback");
+      return res.redirect(`${webappUrl}/auth/callback?error=${encodeURIComponent("Invalid or expired authentication session")}`);
+    }
+
+    logger.info({ state }, "Processing webapp OAuth exchange in GET callback");
+
+    // Exchange code for tokens with timeout
+    const { client, tokens } = await exchangeCodeForTokens(code as string, stateEntry.redirectUri);
+    const profile = await fetchGoogleProfile(client);
+    const { user } = await upsertGoogleAccount(profile, tokens);
+
+    logger.info({ userId: user.id, email: user.email }, "Webapp OAuth exchange completed, redirecting to webapp");
+
+    // Redirect to webapp with user info (encoded in URL - will be read by callback page)
+    // Note: In production, you might want to use a temporary token/session instead
+    const params = new URLSearchParams();
+    params.set("success", "true");
+    params.set("userId", user.id);
+    params.set("email", user.email);
+    params.set("displayName", user.displayName || user.email);
+    if (user.pictureUrl) {
+      params.set("pictureUrl", user.pictureUrl);
+    }
+
+    res.redirect(`${webappUrl}/auth/callback?${params.toString()}`);
+  } catch (error) {
+    logger.error({ error, state }, "Webapp OAuth exchange failed in GET callback");
+    const errorMessage = error instanceof Error ? error.message : "Authentication failed";
+    res.redirect(`${webappUrl}/auth/callback?error=${encodeURIComponent(errorMessage)}`);
+  }
 });
 
 authRouter.post("/google/exchange", async (req, res, next) => {

@@ -14,83 +14,48 @@ function AuthCallbackContent() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const code = searchParams.get("code");
-        const state = searchParams.get("state");
         const error = searchParams.get("error");
+        const success = searchParams.get("success");
 
-        // Check for OAuth error from Google
+        // Check for OAuth error
         if (error) {
-          setError(`OAuth error: ${error}. Please try logging in again.`);
+          setError(decodeURIComponent(error));
           return;
         }
 
-        if (!code || !state) {
-          setError("Missing authentication parameters. Please try logging in again.");
-          return;
-        }
+        // Backend now handles exchange directly and redirects here with user info
+        if (success === "true") {
+          const userId = searchParams.get("userId");
+          const email = searchParams.get("email");
+          const displayName = searchParams.get("displayName");
+          const pictureUrl = searchParams.get("pictureUrl");
 
-        // Exchange code for tokens
-        // Use direct backend URL to avoid Next.js rewrite issues (like extension does)
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://taskforce-backend-production.up.railway.app";
-        
-        // Add timeout wrapper to prevent hanging
-        const fetchWithTimeout = (url: string, config: RequestInit, timeoutMs: number): Promise<Response> => {
-          return Promise.race([
-            fetch(url, config),
-            new Promise<Response>((_, reject) =>
-              setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
-            ),
-          ]);
-        };
+          if (!userId || !email) {
+            setError("Missing user information. Please try logging in again.");
+            return;
+          }
 
-        const exchangeResponse = await fetchWithTimeout(
-          `${backendUrl}/api/auth/google/exchange`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ code, state }),
-          },
-          30000 // 30 second timeout
-        );
-
-        if (!exchangeResponse.ok) {
-          const errorText = await exchangeResponse.text();
-          let errorMessage = errorText || `Authentication failed with status ${exchangeResponse.status}`;
-          try {
-            const errorJson = JSON.parse(errorText);
-            if (errorJson.error) {
-              errorMessage = errorJson.error;
+          // Store user info
+          if (typeof window !== "undefined") {
+            localStorage.setItem("userId", userId);
+            localStorage.setItem("userEmail", email);
+            localStorage.setItem("userDisplayName", displayName || email);
+            if (pictureUrl) {
+              localStorage.setItem("userPictureUrl", pictureUrl);
             }
-          } catch {
-            // Not JSON, use text as-is
           }
-          throw new Error(errorMessage);
+
+          // Redirect to dashboard
+          router.push("/dashboard");
+          return;
         }
 
-        const { user } = await exchangeResponse.json();
-
-        // Store user info
-        if (typeof window !== "undefined") {
-          localStorage.setItem("userId", user.id);
-          localStorage.setItem("userEmail", user.email);
-          localStorage.setItem("userDisplayName", user.displayName || user.email);
-          if (user.pictureUrl) {
-            localStorage.setItem("userPictureUrl", user.pictureUrl);
-          }
-        }
-
-        // Redirect to dashboard
-        router.push("/dashboard");
+        // Fallback: If no success param, show error
+        setError("Authentication failed. Please try logging in again.");
       } catch (err) {
         let errorMessage = "Authentication failed";
         if (err instanceof Error) {
           errorMessage = err.message;
-          // Provide more helpful error message for state issues
-          if (errorMessage.includes("OAuth state") || errorMessage.includes("Invalid or expired")) {
-            errorMessage = "Authentication session expired. Please try logging in again.";
-          }
         }
         setError(errorMessage);
       }
