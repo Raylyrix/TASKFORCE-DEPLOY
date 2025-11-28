@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 
+import { logger } from "../../lib/logger";
 import { oauthStateStore } from "../../services/oauthStateStore";
 import {
   exchangeCodeForTokens,
@@ -135,18 +136,29 @@ authRouter.get("/google/callback", (req, res) => {
 });
 
 authRouter.post("/google/exchange", async (req, res, next) => {
+  const startTime = Date.now();
+  
   try {
+    logger.info({ timestamp: new Date().toISOString() }, "Starting OAuth exchange");
+    
     const { code, state } = exchangeSchema.parse(req.body ?? {});
     const stateEntry = oauthStateStore.consume(state);
 
     if (!stateEntry) {
+      logger.warn({ state }, "Invalid or expired OAuth state");
       res.status(400).json({ error: "Invalid or expired OAuth state" });
       return;
     }
 
+    logger.info({ elapsed: Date.now() - startTime }, "Exchanging code for tokens");
     const { client, tokens } = await exchangeCodeForTokens(code, stateEntry.redirectUri);
+    logger.info({ elapsed: Date.now() - startTime }, "Tokens exchanged, fetching profile");
+
     const profile = await fetchGoogleProfile(client);
+    logger.info({ elapsed: Date.now() - startTime, email: profile.email }, "Profile fetched, upserting account");
+
     const { user } = await upsertGoogleAccount(profile, tokens);
+    logger.info({ elapsed: Date.now() - startTime, userId: user.id }, "Account upserted, authentication complete");
 
     res.status(200).json({
       user: {
@@ -157,7 +169,11 @@ authRouter.post("/google/exchange", async (req, res, next) => {
       },
       state: stateEntry,
     });
+    
+    logger.info({ elapsed: Date.now() - startTime, userId: user.id }, "OAuth exchange completed successfully");
   } catch (error) {
+    const elapsed = Date.now() - startTime;
+    logger.error({ error, elapsed }, "OAuth exchange failed");
     next(error);
   }
 });

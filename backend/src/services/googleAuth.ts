@@ -277,42 +277,52 @@ export const upsertGoogleAccount = async (
 
   // Queue calendar connection setup as a background job - don't block authentication
   // Calendar connection will be set up in the background automatically
-  try {
-    const { calendarConnectionSetupQueue } = await import("../queue/calendarConnectionSetupQueue.js");
-    await calendarConnectionSetupQueue.add(
-      "setup-calendar-connection",
-      {
-        userId: user.id,
-        profile: {
-          email: profile.email,
-          id: profile.id,
-          name: profile.name,
-          picture: profile.picture,
-        },
-        accessToken,
-        refreshToken,
-        scope,
-        tokenType,
-        expiryDate: expiryDate.toISOString(),
-      },
-      {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 5000,
-        },
-        removeOnComplete: true,
-        removeOnFail: false,
-      }
-    );
-    logger.info({ userId: user.id }, "Queued calendar connection setup job");
-  } catch (error) {
-    // If queue is not available, log and continue - authentication should still succeed
-    logger.warn(
-      { error: error instanceof Error ? error.message : String(error), userId: user.id },
-      "Failed to queue calendar connection setup job - calendar connection will need to be set up manually"
-    );
-  }
+  // Use fire-and-forget pattern - don't await anything
+  setImmediate(() => {
+    import("../queue/calendarConnectionSetupQueue.js")
+      .then(({ calendarConnectionSetupQueue }) => {
+        // Don't await - just fire and forget
+        calendarConnectionSetupQueue.add(
+          "setup-calendar-connection",
+          {
+            userId: user.id,
+            profile: {
+              email: profile.email,
+              id: profile.id,
+              name: profile.name,
+              picture: profile.picture,
+            },
+            accessToken,
+            refreshToken,
+            scope,
+            tokenType,
+            expiryDate: expiryDate.toISOString(),
+          },
+          {
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 5000,
+            },
+            removeOnComplete: true,
+            removeOnFail: false,
+          }
+        ).catch((queueError) => {
+          logger.warn(
+            { error: queueError, userId: user.id },
+            "Failed to add calendar connection setup job to queue"
+          );
+        });
+        logger.info({ userId: user.id }, "Queued calendar connection setup job");
+      })
+      .catch((error) => {
+        // If queue import fails, log and continue - authentication should still succeed
+        logger.warn(
+          { error: error instanceof Error ? error.message : String(error), userId: user.id },
+          "Failed to import calendar connection setup queue - calendar connection will need to be set up manually"
+        );
+      });
+  });
 
   return { user };
 };
