@@ -103,8 +103,15 @@ export default function EmailsPage() {
       api.gmail.reply(messageId, text, html, replyAll),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gmail-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["gmail-thread"] });
       setShowCompose(false);
+      setReplyToMessageId(null);
       alert("Reply sent successfully!");
+    },
+    onError: (error: any) => {
+      console.error("Reply error:", error);
+      const errorMessage = error?.message || error?.response?.data?.error || "Failed to send reply. Please try again.";
+      alert(errorMessage);
     },
   });
 
@@ -115,6 +122,11 @@ export default function EmailsPage() {
       queryClient.invalidateQueries({ queryKey: ["gmail-messages"] });
       setShowCompose(false);
       alert("Email sent successfully!");
+    },
+    onError: (error: any) => {
+      console.error("Send error:", error);
+      const errorMessage = error?.message || error?.response?.data?.error || "Failed to send email. Please check your connection and try again.";
+      alert(errorMessage);
     },
   });
 
@@ -1567,8 +1579,18 @@ function ComposeModal({
     if (mode === "reply" || mode === "replyAll") {
       if (originalMessage?.payload?.headers) {
         const headers = originalMessage.payload.headers;
-        setTo(mode === "replyAll" ? headers.from || "" : headers.from || "");
-        setCc(mode === "replyAll" ? headers.cc || "" : "");
+        // For reply, just set the sender
+        // For replyAll, backend will handle the recipients properly
+        setTo(headers.from || "");
+        if (mode === "replyAll") {
+          // Show CC field with original recipients (backend will handle properly)
+          const originalTo = headers.to || "";
+          const originalCc = headers.cc || "";
+          const allRecipients = [originalTo, originalCc].filter(Boolean).join(", ");
+          setCc(allRecipients);
+        } else {
+          setCc("");
+        }
         setSubject(headers.subject?.startsWith("Re:") ? headers.subject : `Re: ${headers.subject || ""}`);
         setBody("\n\n--- Original Message ---\n" + (originalMessage.payload.body.text || originalMessage.snippet));
       }

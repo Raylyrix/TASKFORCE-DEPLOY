@@ -572,12 +572,45 @@ gmailRouter.post("/messages/:messageId/reply", requireUser, async (req, res, nex
     const userEmail = profile.data.emailAddress || "";
 
     if (payload.replyAll) {
-      // Reply to all: original sender + all recipients
-      const toList = headers.from || "";
-      const ccList = [headers.to, headers.cc].filter(Boolean).join(", ");
-      replyHeaders.push(`To: ${toList}`);
-      if (ccList) {
-        replyHeaders.push(`Cc: ${ccList}`);
+      // Reply to all: original sender + all recipients (excluding user's own email)
+      const originalFrom = headers.from || "";
+      const originalTo = headers.to || "";
+      const originalCc = headers.cc || "";
+      
+      // Extract email addresses from headers (remove display names)
+      const extractEmails = (headerValue: string): string[] => {
+        if (!headerValue) return [];
+        return headerValue
+          .split(",")
+          .map((addr) => {
+            const match = addr.match(/<([^>]+)>/) || addr.match(/([\w\.-]+@[\w\.-]+\.\w+)/);
+            return match ? match[1] : addr.trim();
+          })
+          .filter(Boolean);
+      };
+      
+      const allRecipients = new Set([
+        ...extractEmails(originalFrom),
+        ...extractEmails(originalTo),
+        ...extractEmails(originalCc),
+      ]);
+      
+      // Remove user's own email from recipients
+      allRecipients.delete(userEmail.toLowerCase());
+      
+      const recipientsArray = Array.from(allRecipients);
+      if (recipientsArray.length === 0) {
+        // Fallback: just reply to original sender
+        replyHeaders.push(`To: ${originalFrom}`);
+      } else {
+        // Original sender goes to To, others to Cc
+        const originalSenderEmail = extractEmails(originalFrom)[0] || recipientsArray[0];
+        const otherRecipients = recipientsArray.filter((email) => email.toLowerCase() !== originalSenderEmail.toLowerCase());
+        
+        replyHeaders.push(`To: ${originalSenderEmail}`);
+        if (otherRecipients.length > 0) {
+          replyHeaders.push(`Cc: ${otherRecipients.join(", ")}`);
+        }
       }
     } else {
       // Reply to sender only
@@ -620,10 +653,26 @@ gmailRouter.post("/messages/:messageId/reply", requireUser, async (req, res, nex
 });
 
 // Send new email
+// Helper to validate comma-separated email addresses
+const emailListSchema = z.string().refine(
+  (val) => {
+    if (!val || val.trim() === "") return true; // Empty is valid (optional)
+    const emails = val.split(",").map((e) => e.trim()).filter(Boolean);
+    return emails.every((email) => z.string().email().safeParse(email).success);
+  },
+  { message: "Invalid email address format" }
+);
+
 const sendEmailSchema = z.object({
-  to: z.string().email(),
-  cc: z.string().email().optional(),
-  bcc: z.string().email().optional(),
+  to: z.string().refine(
+    (val) => {
+      const emails = val.split(",").map((e) => e.trim()).filter(Boolean);
+      return emails.length > 0 && emails.every((email) => z.string().email().safeParse(email).success);
+    },
+    { message: "Invalid 'to' email address format" }
+  ),
+  cc: emailListSchema.optional(),
+  bcc: emailListSchema.optional(),
   subject: z.string().min(1),
   text: z.string().min(1),
   html: z.string().optional(),
@@ -648,9 +697,17 @@ gmailRouter.post("/messages/send", requireUser, async (req, res, next) => {
 
     // Build email headers
     const headers: string[] = [];
-    headers.push(`To: ${payload.to}`);
-    if (payload.cc) headers.push(`Cc: ${payload.cc}`);
-    if (payload.bcc) headers.push(`Bcc: ${payload.bcc}`);
+    // Clean and format email addresses (support comma-separated)
+    const toEmails = payload.to.split(",").map((e) => e.trim()).filter(Boolean).join(", ");
+    headers.push(`To: ${toEmails}`);
+    if (payload.cc) {
+      const ccEmails = payload.cc.split(",").map((e) => e.trim()).filter(Boolean).join(", ");
+      headers.push(`Cc: ${ccEmails}`);
+    }
+    if (payload.bcc) {
+      const bccEmails = payload.bcc.split(",").map((e) => e.trim()).filter(Boolean).join(", ");
+      headers.push(`Bcc: ${bccEmails}`);
+    }
     headers.push(`Subject: ${payload.subject}`);
     headers.push(`From: ${userEmail}`);
 
