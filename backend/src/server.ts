@@ -2,7 +2,7 @@ import { createApp } from "./app";
 import { AppConfig } from "./config/env";
 import { logger } from "./lib/logger";
 import { initializeQueryLogger } from "./middleware/queryLogger";
-import { initializeQueues } from "./queue";
+import { initializeQueues, getWorkers, closeQueues } from "./queue";
 import { schedulePeriodicSyncs } from "./queue/calendarSyncQueue";
 import { processScheduledEmails } from "./queue/scheduledEmailQueue";
 import { processSnoozedEmails } from "./queue/snoozeQueue";
@@ -63,13 +63,45 @@ const server = app.listen(AppConfig.port, () => {
   );
 });
 
-const shutdown = (signal: string) => {
-  logger.info({ signal }, "Shutting down server");
+const shutdown = async (signal: string) => {
+  logger.info({ signal }, "Shutting down server gracefully");
+  
+  // Stop accepting new HTTP requests
   server.close(() => {
     logger.info("HTTP server closed");
-    process.exit(0);
   });
+  
+  // Wait for queue workers to finish current jobs (max 30 seconds)
+  try {
+    const workers = getWorkers();
+    logger.info({ workerCount: workers.length }, "Closing queue workers");
+    
+    await Promise.all(
+      workers.map((worker) => 
+        worker.close().catch((error) => {
+          logger.warn({ error }, "Error closing worker");
+        })
+      )
+    );
+    
+    // Close queue connections
+    await closeQueues();
+    
+    logger.info("All queue workers closed");
+  } catch (error) {
+    logger.error({ error }, "Error during graceful shutdown");
+  }
+  
+  // Give a small buffer for cleanup, then exit
+  setTimeout(() => {
+    logger.info("Shutdown complete");
+    process.exit(0);
+  }, 2000);
 };
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
