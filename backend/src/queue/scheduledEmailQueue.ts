@@ -3,7 +3,6 @@ import type { Job } from "bullmq";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { googleAuthService } from "../services/googleAuth";
-import { gmailDeliveryService } from "../services/gmailDelivery";
 import { QueueName, type ScheduledEmailJob } from "./types";
 import { createQueue, registerWorker } from "./queueFactory";
 import { google } from "googleapis";
@@ -42,56 +41,44 @@ export const registerScheduledEmailWorker = () =>
         throw new Error(`Scheduled email not ready yet. Rescheduling in ${delay}ms`);
       }
 
-      // Check if we should send as reply
-      const sendAsReply = scheduledEmail.sendAsReply ?? false;
-      let threadId: string | null = scheduledEmail.threadId || scheduledEmail.replyToThreadId || null;
-      let replyHeaders: Record<string, string> = {};
+      // Get Gmail client
+      const client = await googleAuthService.getAuthorizedClientForUser(userId);
+      const gmail = google.gmail({ version: "v1", auth: client });
 
-      if (sendAsReply) {
-        // Get thread ID from replyToMessageId or use replyToThreadId
-        if (scheduledEmail.replyToThreadId) {
-          threadId = scheduledEmail.replyToThreadId;
-        } else if (scheduledEmail.replyToMessageId) {
-          try {
-            const client = await googleAuthService.getAuthorizedClientForUser(userId);
-            const gmail = google.gmail({ version: "v1", auth: client });
-            const message = await gmail.users.messages.get({
-              userId: "me",
-              id: scheduledEmail.replyToMessageId,
-              format: "metadata",
-              metadataHeaders: ["Message-ID", "In-Reply-To", "References"],
-            });
-            threadId = message.data.threadId || null;
-            
-            // Set reply headers
-            if (threadId && scheduledEmail.replyToMessageId) {
-              replyHeaders = {
-                "In-Reply-To": scheduledEmail.replyToMessageId,
-                "References": scheduledEmail.replyToMessageId,
-              };
-            }
-          } catch (error) {
-            logger.error({ error, replyToMessageId: scheduledEmail.replyToMessageId }, "Failed to get thread ID for reply");
-          }
-        }
+      // Build email
+      const emailHeaders = [
+        `To: ${scheduledEmail.to}`,
+        `Subject: ${scheduledEmail.subject}`,
+      ];
+
+      if (scheduledEmail.cc) {
+        emailHeaders.push(`Cc: ${scheduledEmail.cc}`);
       }
 
-      // Prepare subject - add "Re: " prefix for replies if not already present
-      let emailSubject = scheduledEmail.subject;
-      if (sendAsReply && !emailSubject.startsWith("Re:") && !emailSubject.startsWith("RE:")) {
-        emailSubject = `Re: ${emailSubject}`;
+      if (scheduledEmail.bcc) {
+        emailHeaders.push(`Bcc: ${scheduledEmail.bcc}`);
       }
 
-      // Use gmailDeliveryService for consistent email sending
-      const result = await gmailDeliveryService.sendEmailViaGmail({
-        userId,
-        to: scheduledEmail.to,
-        subject: emailSubject,
-        bodyHtml: scheduledEmail.html || scheduledEmail.body.replace(/\n/g, "<br>"),
-        cc: scheduledEmail.cc ? [scheduledEmail.cc] : undefined,
-        bcc: scheduledEmail.bcc ? [scheduledEmail.bcc] : undefined,
-        threadId: threadId,
-        headers: Object.keys(replyHeaders).length > 0 ? replyHeaders : undefined,
+      emailHeaders.push("Content-Type: text/html; charset=utf-8");
+      emailHeaders.push("");
+
+      const emailBody = [
+        ...emailHeaders,
+        scheduledEmail.html || scheduledEmail.body.replace(/\n/g, "<br>"),
+      ].join("\n");
+
+      const encodedMessage = Buffer.from(emailBody)
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      // Send email
+      const result = await gmail.users.messages.send({
+        userId: "me",
+        requestBody: {
+          raw: encodedMessage,
+        },
       });
 
       // Update status
@@ -109,7 +96,7 @@ export const registerScheduledEmailWorker = () =>
       }
 
       logger.info(
-        { scheduledEmailId, messageId: result.id },
+        { scheduledEmailId, messageId: result.data.id },
         "Scheduled email sent successfully",
       );
     } catch (error) {
@@ -138,53 +125,42 @@ export const registerScheduledEmailWorker = () =>
  * Check for scheduled emails that are ready to send and queue them
  */
 export const processScheduledEmails = async () => {
-  // Skip if database is not configured
-  if (!process.env.DATABASE_URL) {
-    logger.debug("DATABASE_URL not set, skipping scheduled email processing");
-    return 0;
-  }
+  const now = new Date();
 
-  try {
-    const now = new Date();
-
-    const readyEmails = await prisma.scheduledEmail.findMany({
-      where: {
-        status: "PENDING",
-        scheduledAt: {
-          lte: now,
-        },
+  const readyEmails = await prisma.scheduledEmail.findMany({
+    where: {
+      status: "PENDING",
+      scheduledAt: {
+        lte: now,
       },
-      take: 100, // Process in batches
-    });
+    },
+    take: 100, // Process in batches
+  });
 
-    logger.info({ count: readyEmails.length }, "Found scheduled emails ready to send");
+  logger.info({ count: readyEmails.length }, "Found scheduled emails ready to send");
 
-    for (const email of readyEmails) {
-      try {
-        await scheduledEmailQueue.add(
-          `scheduled-email-${email.id}`,
-          {
-            scheduledEmailId: email.id,
-            userId: email.userId,
+  for (const email of readyEmails) {
+    try {
+      await scheduledEmailQueue.add(
+        `scheduled-email-${email.id}`,
+        {
+          scheduledEmailId: email.id,
+          userId: email.userId,
+        },
+        {
+          jobId: `scheduled-email-${email.id}`,
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 5000,
           },
-          {
-            jobId: `scheduled-email-${email.id}`,
-            attempts: 3,
-            backoff: {
-              type: "exponential",
-              delay: 5000,
-            },
-          },
-        );
-      } catch (error) {
-        logger.error({ error, scheduledEmailId: email.id }, "Failed to queue scheduled email");
-      }
+        },
+      );
+    } catch (error) {
+      logger.error({ error, scheduledEmailId: email.id }, "Failed to queue scheduled email");
     }
-
-    return readyEmails.length;
-  } catch (error) {
-    logger.error({ error }, "Error processing scheduled emails - database may not be available");
-    return 0;
   }
+
+  return readyEmails.length;
 };
 

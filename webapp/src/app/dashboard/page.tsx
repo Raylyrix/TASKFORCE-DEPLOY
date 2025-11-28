@@ -53,35 +53,18 @@ export default function DashboardPage() {
   const meetingTypesArray = Array.isArray(meetingTypes) ? meetingTypes : [];
   const totalBookings = bookingsData?.total || meetingTypesArray.reduce((sum, mt) => sum + (mt.bookingStats?.total || 0), 0);
   
-  // Fetch real campaign metrics from campaign details
-  const { data: campaignDetails } = useQuery({
-    queryKey: ["campaign-details-for-dashboard", campaignsArray.map(c => c.id).join(",")],
-    queryFn: async () => {
-      if (campaignsArray.length === 0) return [];
-      const details = await Promise.all(
-        campaignsArray.map(campaign => 
-          api.campaigns.get(campaign.id).catch(() => null)
-        )
-      );
-      return details.filter(Boolean);
+  // Calculate campaign metrics
+  const campaignMetrics = campaignsArray.reduce(
+    (acc, campaign) => {
+      // These would come from detailed campaign data in a real implementation
+      return {
+        totalSent: acc.totalSent + (campaign.status === "COMPLETED" ? 10 : 0), // Placeholder
+        totalOpened: acc.totalOpened + 5, // Placeholder
+        totalClicked: acc.totalClicked + 2, // Placeholder
+      };
     },
-    enabled: campaignsArray.length > 0,
-  });
-
-  // Calculate campaign metrics from real data
-  const campaignMetrics = campaignDetails && campaignDetails.length > 0
-    ? campaignDetails.reduce(
-        (acc, campaign: any) => {
-          const summary = campaign.summary || { sent: 0, opened: 0, clicked: 0 };
-          return {
-            totalSent: acc.totalSent + (summary.sent || 0),
-            totalOpened: acc.totalOpened + (summary.opened || 0),
-            totalClicked: acc.totalClicked + (summary.clicked || 0),
-          };
-        },
-        { totalSent: 0, totalOpened: 0, totalClicked: 0 },
-      )
-    : { totalSent: 0, totalOpened: 0, totalClicked: 0 };
+    { totalSent: 0, totalOpened: 0, totalClicked: 0 },
+  );
 
   const openRate = campaignMetrics.totalSent > 0 
     ? ((campaignMetrics.totalOpened / campaignMetrics.totalSent) * 100).toFixed(1)
@@ -90,42 +73,16 @@ export default function DashboardPage() {
     ? ((campaignMetrics.totalClicked / campaignMetrics.totalSent) * 100).toFixed(1)
     : "0";
 
-  // Fetch real daily tracking analytics
-  const { data: dailyAnalytics } = useQuery({
-    queryKey: ["daily-analytics"],
-    queryFn: () => api.tracking.getDailyAnalytics(7),
-  });
-
-  // Generate time-series data from real bookings, campaigns, and tracking events
-  const chartTimeSeriesData = Array.from({ length: 7 }, (_, i) => {
+  // Time-series data (last 7 days) - placeholder data
+  const timeSeriesData = Array.from({ length: 7 }, (_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - i));
-    const dateKey = date.toISOString().split('T')[0];
-    const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    
-    // Count campaigns created on this day
-    const campaignsOnDay = campaignsArray.filter(c => {
-      const createdDate = new Date(c.createdAt).toISOString().split('T')[0];
-      return createdDate === dateKey;
-    }).length;
-    
-    // Count bookings on this day
-    const bookingsOnDay = bookingsData?.bookings?.filter(b => {
-      const bookingDate = new Date(b.startTime).toISOString().split('T')[0];
-      return bookingDate === dateKey;
-    }).length || 0;
-    
-    // Get opens/clicks from daily analytics (real tracking data)
-    const dayAnalytics = dailyAnalytics?.dailyData?.find(d => d.dateKey === dateKey);
-    const opensOnDay = dayAnalytics?.opens || 0;
-    const clicksOnDay = dayAnalytics?.clicks || 0;
-    
     return {
-      date: dateStr,
-      campaigns: campaignsOnDay,
-      bookings: bookingsOnDay,
-      opens: opensOnDay,
-      clicks: clicksOnDay,
+      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      campaigns: Math.floor(Math.random() * 5) + 1,
+      bookings: Math.floor(Math.random() * 3),
+      opens: Math.floor(Math.random() * 20) + 10,
+      clicks: Math.floor(Math.random() * 10) + 2,
     };
   });
 
@@ -240,7 +197,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Activity Over Time</h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartTimeSeriesData}>
+              <LineChart data={timeSeriesData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />

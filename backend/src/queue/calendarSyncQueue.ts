@@ -37,27 +37,20 @@ export const registerCalendarSyncWorker = () =>
  * Queue calendar sync jobs for all connections that need syncing based on their cadence
  */
 export const schedulePeriodicSyncs = async () => {
-  // Skip if database is not configured
-  if (!process.env.DATABASE_URL) {
-    logger.debug("DATABASE_URL not set, skipping calendar sync scheduling");
-    return 0;
-  }
-
-  try {
-    const now = new Date();
-    const connections = await prisma.calendarConnection.findMany({
-      where: {
-        // Only sync active connections with valid OAuth credentials
-        user: {
-          oauthCredential: {
-            isNot: null,
-          },
+  const now = new Date();
+  const connections = await prisma.calendarConnection.findMany({
+    where: {
+      // Only sync active connections with valid OAuth credentials
+      user: {
+        oauthCredential: {
+          isNot: null,
         },
       },
-      include: {
-        user: true,
-      },
-    });
+    },
+    include: {
+      user: true,
+    },
+  });
 
   const jobsToQueue: Array<{
     connectionId: string;
@@ -107,23 +100,19 @@ export const schedulePeriodicSyncs = async () => {
     }
   }
 
-    // Queue all sync jobs
-    for (const jobData of jobsToQueue) {
-      await calendarSyncQueue.add("sync-calendar", jobData, {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 5000,
-        },
-      });
-    }
-
-    logger.info({ queuedJobs: jobsToQueue.length }, "Scheduled periodic calendar syncs");
-
-    return jobsToQueue.length;
-  } catch (error) {
-    logger.error({ error }, "Error scheduling periodic syncs - database may not be available");
-    return 0;
+  // Queue all sync jobs
+  for (const jobData of jobsToQueue) {
+    await calendarSyncQueue.add("sync-calendar", jobData, {
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 5000,
+      },
+    });
   }
+
+  logger.info({ queuedJobs: jobsToQueue.length }, "Scheduled periodic calendar syncs");
+
+  return jobsToQueue.length;
 };
 

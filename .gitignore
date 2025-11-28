@@ -14,12 +14,6 @@ dist/
 out/
 
 # Environment variables
-.env
-.env.local
-.env.*.local
-backend/.env
-webapp/.env
-*.env
 
 
 # IDE

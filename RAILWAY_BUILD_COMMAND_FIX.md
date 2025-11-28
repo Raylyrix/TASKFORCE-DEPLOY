@@ -50,3 +50,4 @@ cd backend && npm run build:railway
 
 This way, migrations run at the right time (when DATABASE_URL is available) instead of during build.
 
+

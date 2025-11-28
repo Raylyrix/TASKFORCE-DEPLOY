@@ -6,22 +6,8 @@ config();
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().optional(),
-  DATABASE_URL: z
-    .string()
-    .transform((val) => (val === "" ? undefined : val))
-    .optional()
-    .refine(
-      (val) => val === undefined || z.string().url().safeParse(val).success,
-      { message: "DATABASE_URL must be a valid URL if provided" }
-    ),
-  REDIS_URL: z
-    .string()
-    .transform((val) => (val === "" ? undefined : val))
-    .optional()
-    .refine(
-      (val) => val === undefined || z.string().url().safeParse(val).success,
-      { message: "REDIS_URL must be a valid URL if provided" }
-    ),
+  DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a valid URL" }),
+  REDIS_URL: z.string().url({ message: "REDIS_URL must be a valid URL" }),
   BACKEND_PUBLIC_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
@@ -60,23 +46,17 @@ if (!env.SESSION_SECRET) missingSecrets.push("SESSION_SECRET");
 // ENCRYPTION_KEY and ENCRYPTION_SALT are optional but recommended for production
 
 if (missingSecrets.length > 0) {
-  const message = `Missing environment variables: ${missingSecrets.join(", ")}`;
-  // In production, only warn - don't crash on startup
-  // These are needed for OAuth but the server can start without them
-  console.warn(`[env] ${message}. Server will start but OAuth features may not work.`);
+  const message = `Missing environment variables: ${missingSecrets.join(", ")}. Server will start but OAuth features may not work.`;
+  // In production, warn but don't fail - OAuth is optional for basic functionality
+  console.warn(`[env] ${message}`);
 }
-
-// Railway sets PORT automatically - use it if available
-const port = process.env.PORT 
-  ? parseInt(process.env.PORT, 10) 
-  : (env.PORT ?? 4000);
 
 export const AppConfig = {
   nodeEnv: env.NODE_ENV,
-  port,
-  databaseUrl: env.DATABASE_URL ?? "",
-  redisUrl: env.REDIS_URL ?? "",
-  publicUrl: env.BACKEND_PUBLIC_URL ?? `http://localhost:${port}`,
+  port: env.PORT ?? 4000,
+  databaseUrl: env.DATABASE_URL,
+  redisUrl: env.REDIS_URL,
+  publicUrl: env.BACKEND_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
   google: {
     clientId: env.GOOGLE_CLIENT_ID ?? "",
     clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",

@@ -16,7 +16,6 @@
  */
 
 import { addMilliseconds, isBefore } from "date-fns";
-import { google } from "googleapis";
 
 import {
   CampaignStatus,
@@ -40,33 +39,7 @@ import type {
 import { gmailDeliveryService } from "./gmailDelivery";
 import { googleAuthService } from "./googleAuth";
 
-// Helper function to get thread ID from message ID
-const getThreadIdFromMessage = async (userId: string, messageId: string): Promise<string | null> => {
-  try {
-    const authClient = await googleAuthService.getAuthorizedClientForUser(userId);
-    const gmail = google.gmail({ version: "v1", auth: authClient });
-    
-    const message = await gmail.users.messages.get({
-      userId: "me",
-      id: messageId,
-      format: "metadata",
-      metadataHeaders: ["Message-ID", "In-Reply-To", "References"],
-    });
-
-    return message.data.threadId || null;
-  } catch (error) {
-    logger.error({ error, messageId }, "Failed to get thread ID from message");
-    return null;
-  }
-};
-
 type RecipientRecord = Record<string, string>;
-
-export type CampaignLabelConfig = {
-  autoCreate?: boolean;
-  labelName?: string;
-  labelIds?: string[];
-};
 
 export type SendStrategy = {
   startAt: string;
@@ -88,20 +61,13 @@ export type CampaignCreationInput = {
     payload: RecipientRecord;
   }>;
   strategy: SendStrategy;
-  labelConfig?: CampaignLabelConfig;
 };
 
 export type FollowUpStepConfig = {
-  delayMs?: number; // Keep for backward compatibility
-  scheduledAt?: string; // New: absolute date/time (ISO string)
+  delayMs: number;
   subject: string;
   html: string;
   maxAttempts?: number;
-  sendAsReply?: boolean; // New: send as reply or separate email
-  replyToMessageId?: string; // New: message ID to reply to (for existing emails)
-  replyToThreadId?: string; // New: thread ID to reply to
-  parentStepId?: string; // For nested follow-ups - ID of parent step
-  isNested?: boolean; // Whether this is a nested (child) follow-up
 };
 
 export type FollowUpSequenceConfig = {
@@ -226,17 +192,10 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
     for (const step of sequence.steps) {
       const stepOffset = (step.offsetConfig as { 
         delayMs?: number;
-        scheduledAt?: string;
         condition?: "always" | "if_not_opened" | "if_not_replied" | "if_not_clicked";
       }) ?? {};
       
-      // Use scheduledAt if provided, otherwise calculate from delayMs
-      let scheduledAt: Date;
-      if (stepOffset.scheduledAt) {
-        scheduledAt = new Date(stepOffset.scheduledAt);
-      } else {
-        scheduledAt = addMilliseconds(baseDate, stepOffset.delayMs ?? 0);
-      }
+      const scheduledAt = addMilliseconds(baseDate, stepOffset.delayMs ?? 0);
       
       await followUpQueue.add("send-follow-up", {
         followUpSequenceId: sequence.id,
@@ -357,54 +316,11 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     "Sending campaign email",
   );
 
-  // Get label IDs to apply (from campaign label config)
-  let labelIdsToApply: string[] = [];
-  const sendStrategy = recipient.campaign.sendStrategy as SendStrategy & { labelConfig?: CampaignLabelConfig };
-  const campaignLabelConfig = sendStrategy?.labelConfig;
-  
-  if (campaignLabelConfig) {
-    if (campaignLabelConfig.labelIds && campaignLabelConfig.labelIds.length > 0) {
-      labelIdsToApply = campaignLabelConfig.labelIds;
-    } else if (campaignLabelConfig.autoCreate && campaignLabelConfig.labelName) {
-      // Auto-create label if it doesn't exist
-      try {
-        const { googleAuthService } = await import("./googleAuth.js");
-        const { google } = await import("googleapis");
-        const authClient = await googleAuthService.getAuthorizedClientForUser(recipient.campaign.userId);
-        const gmail = google.gmail({ version: "v1", auth: authClient });
-        
-        // Check if label exists
-        const { data: labels } = await gmail.users.labels.list({ userId: "me" });
-        let label = labels.labels?.find((l) => l.name === campaignLabelConfig.labelName);
-        
-        if (!label) {
-          // Create label
-          const { data: newLabel } = await gmail.users.labels.create({
-            userId: "me",
-            requestBody: {
-              name: campaignLabelConfig.labelName,
-              messageListVisibility: "show",
-              labelListVisibility: "labelShow",
-            },
-          });
-          label = newLabel;
-        }
-        
-        if (label?.id) {
-          labelIdsToApply = [label.id];
-        }
-      } catch (error) {
-        logger.warn({ error, campaignId: recipient.campaign.id }, "Failed to create/apply label for campaign");
-      }
-    }
-  }
-
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: recipient.campaign.userId,
     to: recipient.email,
     subject: cleanSubject,
     bodyHtml: messageContent.html,
-    labelIds: labelIdsToApply.length > 0 ? labelIdsToApply : undefined,
   });
 
   await prisma.messageLog.update({
@@ -612,55 +528,11 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     payload,
   );
 
-  // Check if we should send as reply
-  const offsetConfig = step.offsetConfig as {
-    delayMs?: number;
-    scheduledAt?: string;
-    sendAsReply?: boolean;
-    replyToMessageId?: string;
-    replyToThreadId?: string;
-  } | null;
-
-  const sendAsReply = offsetConfig?.sendAsReply ?? false;
-  let threadId: string | null = null;
-  let replyHeaders: Record<string, string> = {};
-
-  if (sendAsReply && originalMessage) {
-    // Get thread ID from original message
-    threadId = originalMessage.gmailMessageId 
-      ? await getThreadIdFromMessage(step.sequence.campaign.userId, originalMessage.gmailMessageId)
-      : null;
-
-    // If we have a specific message ID to reply to, use it
-    if (offsetConfig?.replyToMessageId) {
-      threadId = await getThreadIdFromMessage(step.sequence.campaign.userId, offsetConfig.replyToMessageId);
-    }
-
-    // If we have a specific thread ID, use it
-    if (offsetConfig?.replyToThreadId) {
-      threadId = offsetConfig.replyToThreadId;
-    }
-
-    // Set reply headers
-    if (threadId) {
-      replyHeaders = {
-        "In-Reply-To": originalMessage.gmailMessageId || "",
-        "References": originalMessage.gmailMessageId || "",
-      };
-      // Modify subject to add "Re: " prefix if not already present
-      if (!messageContent.subject.startsWith("Re:") && !messageContent.subject.startsWith("RE:")) {
-        messageContent.subject = `Re: ${messageContent.subject}`;
-      }
-    }
-  }
-
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: step.sequence.campaign.userId,
     to: recipient.email,
     subject: messageContent.subject,
     bodyHtml: messageContent.html,
-    threadId: threadId,
-    headers: Object.keys(replyHeaders).length > 0 ? replyHeaders : undefined,
   });
 
   await prisma.messageLog.update({
@@ -746,18 +618,13 @@ const processTrackingEvent = async (job: TrackingEventJob) => {
 const createCampaign = async (input: CampaignCreationInput) => {
   await ensureUserHasCredentials(input.userId);
 
-  // Merge labelConfig into sendStrategy if provided
-  const sendStrategy = input.labelConfig
-    ? { ...input.strategy, labelConfig: input.labelConfig }
-    : input.strategy;
-
   const campaign = await prisma.campaign.create({
     data: {
       userId: input.userId,
       sheetSourceId: input.sheetSourceId ?? null,
       name: input.name,
       status: CampaignStatus.DRAFT,
-      sendStrategy,
+      sendStrategy: input.strategy,
       trackingConfig: {
         trackOpens: input.strategy.trackOpens,
         trackClicks: input.strategy.trackClicks,
@@ -826,28 +693,12 @@ const createFollowUpSequence = async (campaignId: string, config: FollowUpSequen
       name: config.name,
       settings: {},
       steps: {
-        create: config.steps.map((step, index) => {
-          // Calculate delayMs from scheduledAt if provided, otherwise use delayMs
-          let delayMs = step.delayMs ?? 0;
-          if (step.scheduledAt) {
-            const scheduledDate = new Date(step.scheduledAt);
-            const now = new Date();
-            delayMs = Math.max(0, scheduledDate.getTime() - now.getTime());
-          }
-
-          return {
-            order: index,
-            offsetConfig: {
-              delayMs,
-              scheduledAt: step.scheduledAt,
-              sendAsReply: step.sendAsReply ?? false,
-              replyToMessageId: step.replyToMessageId,
-              replyToThreadId: step.replyToThreadId,
-            },
-            templateSubject: step.subject,
-            templateHtml: step.html,
-          };
-        }),
+        create: config.steps.map((step, index) => ({
+          order: index,
+          offsetConfig: { delayMs: step.delayMs },
+          templateSubject: step.subject,
+          templateHtml: step.html,
+        })),
       },
     },
     include: {

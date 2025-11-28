@@ -64,5 +64,3 @@ export function LabelManagerModal({ labels, onClose }: LabelManagerModalProps) {
   );
 }
 
-
-

@@ -146,10 +146,6 @@ const scheduledEmailSchema = z.object({
   html: z.string().optional(),
   scheduledAt: z.string().datetime(),
   timezone: z.string().optional(),
-  sendAsReply: z.boolean().optional().default(false), // New: send as reply or separate email
-  replyToMessageId: z.string().optional(), // New: message ID to reply to
-  replyToThreadId: z.string().optional(), // New: thread ID to reply to
-  threadId: z.string().optional(), // New: thread ID (can be derived from replyToThreadId)
 });
 
 emailFeaturesRouter.post("/scheduled", requireUser, async (req, res, next) => {
@@ -164,17 +160,8 @@ emailFeaturesRouter.post("/scheduled", requireUser, async (req, res, next) => {
     const scheduled = await prisma.scheduledEmail.create({
       data: {
         userId: currentUser.id,
-        to: payload.to,
-        cc: payload.cc,
-        bcc: payload.bcc,
-        subject: payload.subject,
-        body: payload.body,
-        html: payload.html,
+        ...payload,
         scheduledAt: new Date(payload.scheduledAt),
-        sendAsReply: payload.sendAsReply ?? false,
-        replyToMessageId: payload.replyToMessageId ?? null,
-        replyToThreadId: payload.replyToThreadId ?? null,
-        threadId: payload.threadId ?? null,
       },
     });
 

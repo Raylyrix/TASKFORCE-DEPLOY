@@ -15,5 +15,3 @@ RUN npx prisma generate
 # Default command (can be overridden)
 CMD ["npx", "prisma", "migrate", "deploy"]
 
-
-

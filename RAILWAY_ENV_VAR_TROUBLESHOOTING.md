@@ -105,3 +105,4 @@ After adding the variables:
 4. Check health endpoint to confirm services are connected
 5. Your app should now be fully functional!
 
+

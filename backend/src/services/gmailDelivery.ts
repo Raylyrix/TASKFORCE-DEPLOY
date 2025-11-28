@@ -11,7 +11,6 @@ type SendEmailInput = {
   bcc?: string[];
   threadId?: string | null;
   headers?: Record<string, string>;
-  labelIds?: string[]; // Gmail label IDs to apply to the sent message
 };
 
 const toBase64Url = (input: string) =>
@@ -42,12 +41,9 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     headers.push(["Bcc", payload.bcc.join(", ")]);
   }
 
-  // Add reply headers if provided
   if (payload.headers) {
     for (const [key, value] of Object.entries(payload.headers)) {
-      if (value) {
-        headers.push([key, value]);
-      }
+      headers.push([key, value]);
     }
   }
 
@@ -65,28 +61,9 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     },
   });
 
-  const messageId = response.data.id ?? "";
-  const threadId = response.data.threadId ?? null;
-
-  // Apply labels if provided (must be done after sending)
-  if (payload.labelIds && payload.labelIds.length > 0 && messageId) {
-    try {
-      await gmail.users.messages.modify({
-        userId: "me",
-        id: messageId,
-        requestBody: {
-          addLabelIds: payload.labelIds,
-        },
-      });
-    } catch (error) {
-      // Log but don't fail - label application is non-critical
-      console.warn("Failed to apply labels to sent message:", error);
-    }
-  }
-
   return {
-    id: messageId,
-    threadId,
+    id: response.data.id ?? "",
+    threadId: response.data.threadId ?? null,
   };
 };
 

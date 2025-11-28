@@ -9,15 +9,9 @@ import { campaignEngine } from "../../services/campaignEngine";
 export const followUpsRouter = Router();
 
 const followUpStepSchema = z.object({
-  delayMs: z.number().int().min(0).optional(), // Keep for backward compatibility
-  scheduledAt: z.string().datetime().optional(), // New: absolute date/time
+  delayMs: z.number().int().min(0),
   subject: z.string().min(1),
   html: z.string().min(1),
-  sendAsReply: z.boolean().optional().default(false), // New: send as reply or separate email
-  replyToMessageId: z.string().optional(), // New: message ID to reply to (for existing emails)
-  replyToThreadId: z.string().optional(), // New: thread ID to reply to
-  parentStepId: z.string().optional(), // For nested follow-ups - ID of parent step
-  isNested: z.boolean().optional().default(false), // Whether this is a nested (child) follow-up
 });
 
 const createFollowUpSchema = z.object({

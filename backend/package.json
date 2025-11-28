@@ -5,14 +5,11 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p .",
-    "build:railway": "npm ci && npx prisma generate && npm run build",
-    "start": "node dist/server.js",
+    "start": "npx prisma migrate deploy && node dist/server.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy || echo 'Migrations skipped - DATABASE_URL not set'",
     "prisma:studio": "prisma studio",
-    "clear-rate-limits": "ts-node src/scripts/clearRateLimits.ts",
     "test": "echo \"No tests defined\" && exit 0"
   },
   "keywords": [],

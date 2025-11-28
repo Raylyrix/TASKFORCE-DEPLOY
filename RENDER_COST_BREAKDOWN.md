@@ -201,3 +201,4 @@ Upgrade services to Starter or Professional plans as needed.
 
 **Bottom Line:** The $34 you're seeing is the total of all 4 services. You can reduce it to $19 by using Free tier for the 3 web services and keeping only the database on Professional plan.
 
+

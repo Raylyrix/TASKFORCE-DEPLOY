@@ -79,55 +79,44 @@ export const registerSnoozeRestoreWorker = () =>
  * Check for snoozed emails that are ready to restore and queue them
  */
 export const processSnoozedEmails = async () => {
-  // Skip if database is not configured
-  if (!process.env.DATABASE_URL) {
-    logger.debug("DATABASE_URL not set, skipping snoozed email processing");
-    return 0;
-  }
+  const now = new Date();
 
-  try {
-    const now = new Date();
-
-    const readySnoozes = await prisma.emailSnooze.findMany({
-      where: {
-        snoozeUntil: {
-          lte: now,
-        },
+  const readySnoozes = await prisma.emailSnooze.findMany({
+    where: {
+      snoozeUntil: {
+        lte: now,
       },
-      take: 100, // Process in batches
-    });
+    },
+    take: 100, // Process in batches
+  });
 
-    logger.info({ count: readySnoozes.length }, "Found snoozed emails ready to restore");
+  logger.info({ count: readySnoozes.length }, "Found snoozed emails ready to restore");
 
-    for (const snooze of readySnoozes) {
-      try {
-        await snoozeQueue.add(
-          `snooze-restore-${snooze.id}`,
-          {
-            snoozeId: snooze.id,
-            messageId: snooze.messageId,
-            userId: snooze.userId,
+  for (const snooze of readySnoozes) {
+    try {
+      await snoozeQueue.add(
+        `snooze-restore-${snooze.id}`,
+        {
+          snoozeId: snooze.id,
+          messageId: snooze.messageId,
+          userId: snooze.userId,
+        },
+        {
+          jobId: `snooze-restore-${snooze.id}`,
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 5000,
           },
-          {
-            jobId: `snooze-restore-${snooze.id}`,
-            attempts: 3,
-            backoff: {
-              type: "exponential",
-              delay: 5000,
-            },
-            // Delay to the exact snooze time
-            delay: Math.max(0, new Date(snooze.snoozeUntil).getTime() - now.getTime()),
-          },
-        );
-      } catch (error) {
-        logger.error({ error, snoozeId: snooze.id }, "Failed to queue snooze restore");
-      }
+          // Delay to the exact snooze time
+          delay: Math.max(0, new Date(snooze.snoozeUntil).getTime() - now.getTime()),
+        },
+      );
+    } catch (error) {
+      logger.error({ error, snoozeId: snooze.id }, "Failed to queue snooze restore");
     }
-
-    return readySnoozes.length;
-  } catch (error) {
-    logger.error({ error }, "Error processing snoozed emails - database may not be available");
-    return 0;
   }
+
+  return readySnoozes.length;
 };
 

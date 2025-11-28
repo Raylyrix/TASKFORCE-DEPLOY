@@ -3,7 +3,7 @@ import express from "express";
 
 import { AppConfig } from "./config/env";
 import { logger } from "./lib/logger";
-import { rateLimit } from "./middleware/rateLimit";
+// import { rateLimit } from "./middleware/rateLimit"; // Disabled for now
 import { healthCheck, readinessCheck, livenessCheck } from "./middleware/healthCheck";
 import { securityHeaders, xssProtection, requestSizeLimit, requestId } from "./middleware/security";
 import { auditLogger } from "./middleware/auditLog";
@@ -15,46 +15,40 @@ export const createApp = () => {
   // Trust proxy for accurate IP addresses (important for rate limiting)
   app.set("trust proxy", 1);
 
-  // Health check endpoints FIRST - before any middleware that might fail
-  // This ensures health checks work even if other middleware fails
-  app.get("/health", healthCheck);
-  app.get("/ready", readinessCheck);
-  app.get("/live", livenessCheck);
-
   app.use(
     cors({
-      origin: true,
+      origin: [
+        "https://taskforce-webapp-production.up.railway.app",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
+      ],
       credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
     }),
   );
   app.use(express.json({ limit: "10mb" })); // Increased for email attachments
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   // Security middleware (order matters!)
-  try {
-    app.use(requestId); // Add request ID for tracking
-    app.use(securityHeaders); // Security headers
-    app.use(xssProtection); // XSS protection
-    app.use(requestSizeLimit); // Request size limiting
-  } catch (error) {
-    console.warn("[APP] Some security middleware failed to initialize:", error);
-  }
+  app.use(requestId); // Add request ID for tracking
+  app.use(securityHeaders); // Security headers
+  app.use(xssProtection); // XSS protection
+  app.use(requestSizeLimit); // Request size limiting
 
-  // Redis-based rate limiting (may fail if Redis is unavailable)
-  try {
-    app.use(rateLimit);
-  } catch (error) {
-    console.warn("[APP] Rate limiting middleware failed to initialize:", error);
-  }
+  // Redis-based rate limiting - DISABLED FOR NOW
+  // app.use(rateLimit);
 
   // Audit logging for all requests
-  try {
-    app.use(auditLogger);
-  } catch (error) {
-    console.warn("[APP] Audit logging middleware failed to initialize:", error);
-  }
+  app.use(auditLogger);
 
   app.use("/api", router);
+
+  // Health check endpoints
+  app.get("/health", healthCheck);
+  app.get("/ready", readinessCheck);
+  app.get("/live", livenessCheck);
 
   app.use((req, res) => {
     res.status(404).json({ error: "Not found" });

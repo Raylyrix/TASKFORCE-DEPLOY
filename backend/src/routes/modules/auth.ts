@@ -16,12 +16,12 @@ const startSchema = z.object({
   redirectUri: z.string().url().optional(),
 });
 
-authRouter.post("/google/start", async (req, res, next) => {
+authRouter.post("/google/start", (req, res, next) => {
   try {
     const { redirectUri } = startSchema.parse(req.body ?? {});
     const fallbackRedirect = googleAuthService.getDefaultExtensionRedirect();
     const effectiveRedirect = redirectUri ?? fallbackRedirect ?? undefined;
-    const { state, expiresAt } = await oauthStateStore.create({ redirectUri: effectiveRedirect });
+    const { state, expiresAt } = oauthStateStore.create({ redirectUri: effectiveRedirect });
     const authUrl = generateAuthUrl(state, effectiveRedirect);
 
     res.status(200).json({
@@ -43,10 +43,10 @@ const exchangeSchema = z.object({
 authRouter.post("/google/exchange", async (req, res, next) => {
   try {
     const { code, state } = exchangeSchema.parse(req.body ?? {});
-    const stateEntry = await oauthStateStore.consume(state);
+    const stateEntry = oauthStateStore.consume(state);
 
     if (!stateEntry) {
-      res.status(400).json({ error: "Invalid or expired OAuth state. Please try logging in again." });
+      res.status(400).json({ error: "Invalid or expired OAuth state" });
       return;
     }
 

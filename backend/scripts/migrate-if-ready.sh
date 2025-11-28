@@ -7,3 +7,4 @@ else
   echo "DATABASE_URL not set, skipping migrations (will run on first deploy)"
 fi
 
+

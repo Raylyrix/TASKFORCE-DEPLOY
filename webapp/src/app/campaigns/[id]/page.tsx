@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Layout from "@/components/Layout";
-import FollowUpModal from "@/components/FollowUpModal";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ArrowLeft, Mail, TrendingUp, Eye, MousePointerClick, XCircle, Users, Plus, Clock } from "lucide-react";
@@ -15,8 +14,6 @@ export default function CampaignDetailsPage() {
   const params = useParams();
   const campaignId = params?.id as string;
   const [selectedRecipient, setSelectedRecipient] = useState<string | null>(null);
-  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -47,34 +44,6 @@ export default function CampaignDetailsPage() {
     queryKey: ["follow-ups", campaignId],
     queryFn: () => api.followUps.list(campaignId),
     enabled: !!campaignId,
-  });
-
-  // Get campaign messages for reply selection
-  const { data: campaignMessages } = useQuery({
-    queryKey: ["campaign-messages", campaignId],
-    queryFn: async () => {
-      // Get recipients and their messages
-      const recipients = await api.campaigns.getRecipients(campaignId);
-      const messages: Array<{ id: string; threadId: string; subject: string; to: string }> = [];
-      
-      // We'll need to fetch message details - for now return empty array
-      // In a real implementation, you'd fetch message logs from the campaign
-      return messages;
-    },
-    enabled: !!campaignId && showFollowUpModal,
-  });
-
-  const createFollowUpMutation = useMutation({
-    mutationFn: (data: { name: string; steps: any[] }) =>
-      api.followUps.create(campaignId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["follow-ups", campaignId] });
-      setShowFollowUpModal(false);
-      alert("Follow-up sequence created successfully!");
-    },
-    onError: (error: Error) => {
-      alert(`Failed to create follow-up sequence: ${error.message}`);
-    },
   });
 
   if (campaignLoading || recipientsLoading) {
@@ -219,7 +188,10 @@ export default function CampaignDetailsPage() {
               Follow-up Sequences ({followUpSequences?.sequences?.length || 0})
             </h2>
             <button
-              onClick={() => setShowFollowUpModal(true)}
+              onClick={() => {
+                // TODO: Open follow-up creation modal
+                alert("Follow-up creation will be added. For now, create follow-ups from the campaign composer.");
+              }}
               className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -359,17 +331,6 @@ export default function CampaignDetailsPage() {
           )}
         </div>
       </div>
-
-      {/* Follow-up Modal */}
-      {showFollowUpModal && (
-        <FollowUpModal
-          campaignId={campaignId}
-          onClose={() => setShowFollowUpModal(false)}
-          onSave={(data) => createFollowUpMutation.mutate(data)}
-          isSaving={createFollowUpMutation.isPending}
-          existingMessages={campaignMessages || []}
-        />
-      )}
     </Layout>
   );
 }

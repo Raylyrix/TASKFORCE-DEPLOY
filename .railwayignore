@@ -1,0 +1,7 @@
+webapp/
+extension/
+sim-main/
+taskforce-main/
+*.md
+!backend/**/*.md
+

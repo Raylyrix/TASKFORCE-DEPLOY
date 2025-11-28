@@ -126,3 +126,4 @@ NEXT_PUBLIC_API_URL=<your backend URL, e.g., https://taskforce-backend.onrender.
 - Health checks excluded from rate limiting
 - Database migrations run automatically on deploy
 
+

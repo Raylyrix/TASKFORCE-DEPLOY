@@ -1,4 +1,16 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+// Use relative URL for API calls - Next.js rewrites will proxy to backend
+// This avoids needing NEXT_PUBLIC_API_URL at build time
+// In browser, use relative URL; in SSR, use production backend URL
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Client-side: use relative URL, Next.js rewrites will handle it
+    return '';
+  }
+  // Server-side: use production backend URL (not localhost)
+  return process.env.NEXT_PUBLIC_API_URL || 'https://taskforce-backend-production.up.railway.app';
+};
+
+const API_URL = getApiUrl();
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -124,11 +136,6 @@ export const api = {
         trackOpens?: boolean;
         trackClicks?: boolean;
         template: { subject: string; html: string };
-      };
-      labelConfig?: {
-        autoCreate?: boolean;
-        labelName?: string;
-        labelIds?: string[];
       };
     }) => apiRequest<{ id: string }>("/api/campaigns", { method: "POST", body: data }),
     schedule: (id: string, startAt?: string) =>
@@ -403,27 +410,6 @@ export const api = {
           color: string | null;
         }>;
       }>("/api/gmail/labels"),
-    createLabel: (data: {
-      name: string;
-      messageListVisibility?: "show" | "hide";
-      labelListVisibility?: "labelShow" | "labelHide";
-      color?: {
-        backgroundColor?: string;
-        textColor?: string;
-      };
-    }) =>
-      apiRequest<{
-        label: {
-          id: string;
-          name: string;
-          type: "system" | "user";
-          color: string | null;
-        };
-        created: boolean;
-      }>("/api/gmail/labels", {
-        method: "POST",
-        body: data,
-      }),
     getThread: (threadId: string) =>
       apiRequest<{
         threadId: string;
@@ -536,9 +522,6 @@ export const api = {
       html?: string;
       scheduledAt: string;
       timezone?: string;
-      sendAsReply?: boolean;
-      replyToMessageId?: string;
-      replyToThreadId?: string;
     }) =>
       apiRequest<{
         id: string;
@@ -898,13 +881,9 @@ export const api = {
     create: (campaignId: string, data: {
       name: string;
       steps: Array<{
-        delayMs?: number;
-        scheduledAt?: string;
+        delayMs: number;
         subject: string;
         html: string;
-        sendAsReply?: boolean;
-        replyToMessageId?: string;
-        replyToThreadId?: string;
       }>;
     }) =>
       apiRequest<{
@@ -1326,15 +1305,6 @@ export const api = {
   },
   // Tracking Analytics
   tracking: {
-    getDailyAnalytics: (days?: number) =>
-      apiRequest<{
-        dailyData: Array<{
-          date: string;
-          dateKey: string;
-          opens: number;
-          clicks: number;
-        }>;
-      }>(`/api/tracking/daily-analytics${days ? `?days=${days}` : ""}`),
     getAnalytics: (options?: { campaignId?: string; messageLogId?: string }) => {
       const params = new URLSearchParams();
       if (options?.campaignId) params.append("campaignId", options.campaignId);

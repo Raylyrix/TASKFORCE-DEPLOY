@@ -84,5 +84,3 @@ When prompted:
 
 Once pushed, you can deploy to Render using the guide in `DEPLOY_TO_RENDER.md`!
 
-
-

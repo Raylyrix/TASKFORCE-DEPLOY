@@ -15,25 +15,16 @@ export const CACHE_TTL = {
 } as const;
 
 class CacheService {
-  private redis: IORedis | null = null;
+  private redis: IORedis;
 
   constructor() {
-    // Try to get Redis, but don't crash if it's not configured
-    try {
-      this.redis = getRedis();
-    } catch (error) {
-      logger.warn({ error }, "Redis not available, cache will be disabled");
-      this.redis = null;
-    }
+    this.redis = getRedis();
   }
 
   /**
    * Get value from cache
    */
   async get<T>(key: string): Promise<T | null> {
-    if (!this.redis) {
-      return null; // Cache disabled if Redis is not available
-    }
     try {
       const value = await this.redis.get(key);
       if (!value) return null;
@@ -51,9 +42,6 @@ class CacheService {
    * Set value in cache with TTL
    */
   async set(key: string, value: unknown, ttl: number = 300): Promise<void> {
-    if (!this.redis) {
-      return; // Cache disabled if Redis is not available
-    }
     try {
       await this.redis.setex(key, ttl, JSON.stringify(value));
     } catch (error) {
@@ -68,9 +56,6 @@ class CacheService {
    * Delete value from cache
    */
   async delete(key: string): Promise<void> {
-    if (!this.redis) {
-      return; // Cache disabled if Redis is not available
-    }
     try {
       await this.redis.del(key);
     } catch (error) {
@@ -85,9 +70,6 @@ class CacheService {
    * Delete multiple keys matching pattern
    */
   async deletePattern(pattern: string): Promise<void> {
-    if (!this.redis) {
-      return; // Cache disabled if Redis is not available
-    }
     try {
       const keys = await this.redis.keys(pattern);
       if (keys.length > 0) {

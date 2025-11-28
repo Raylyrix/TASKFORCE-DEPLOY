@@ -416,5 +416,3 @@ Your application is now deployed on Render.com!
 
 **Ready to deploy? Follow the steps above!** 🚀
 
-
-

@@ -1,18 +1,16 @@
 services:
   # Backend API Service
-  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
   - type: web
     name: taskforce-backend
     env: node
-    plan: free  # Options: 'free' (limited), 'starter' ($7/mo), 'standard' ($25/mo)
-    buildCommand: cd backend && npm ci && npx prisma generate && npm run build && npx prisma migrate deploy
+    plan: starter
+    buildCommand: cd backend && npm ci && npm run build
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        sync: false
-        # Render will automatically set PORT, but you can override if needed
+        value: 4000
       - key: DATABASE_URL
         fromDatabase:
           name: taskforce-db
@@ -38,43 +36,34 @@ services:
     autoDeploy: true
 
   # Frontend Web App
-  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
   - type: web
     name: taskforce-webapp
     env: node
-    plan: free  # Options: 'free' (limited), 'starter' ($7/mo), 'standard' ($25/mo)
+    plan: starter
     buildCommand: cd webapp && npm ci && npm run build
     startCommand: cd webapp && npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "3000"
       - key: NEXT_PUBLIC_API_URL
-        sync: false
-        # Set to your backend URL: https://taskforce-backend.onrender.com
-        # Or use fromService if Render supports it
-      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
-        sync: false
-        # Should match GOOGLE_CLIENT_ID from backend
+        fromService:
+          name: taskforce-backend
+          type: web
+          property: host
     healthCheckPath: /api/health
-    # Note: Next.js will handle /api/health route automatically
     autoDeploy: true
-
-  # Redis Cache
-  # Note: Change to 'free' for cost savings (with limitations) or 'starter' for production
-  - type: redis
-    name: taskforce-redis
-    plan: free  # Options: 'free' (limited), 'starter' ($7/mo)
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
 
 databases:
   # PostgreSQL Database
-  # IMPORTANT: Create the database manually in Render Dashboard first with your desired plan
-  # Then reference it here. The 'plan' field is not supported for new databases in render.yaml
-  # Legacy plan names (starter, professional, pro) are no longer supported in YAML
   - name: taskforce-db
     databaseName: taskforce
     user: taskforce
+    plan: starter
     postgresMajorVersion: 16
+
+  # Redis Cache
+  - name: taskforce-redis
+    type: redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
