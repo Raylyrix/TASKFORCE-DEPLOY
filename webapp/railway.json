@@ -11,8 +11,7 @@
     "sleepApplication": false,
     "useLegacyStacker": false,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10,
-    "startCommand": "/bin/sh -c 'npm start'"
+    "restartPolicyMaxRetries": 10
   }
 }
 
