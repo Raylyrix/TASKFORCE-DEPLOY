@@ -57,7 +57,12 @@ export const generateAuthUrl = (state: string, redirectUri?: string) => {
 
 export const exchangeCodeForTokens = async (code: string, redirectUri?: string) => {
   const client = createOAuthClient(redirectUri);
-  const { tokens } = await client.getToken(code);
+  // Add timeout to prevent hanging - 10 seconds should be enough for token exchange
+  const { tokens } = await withTimeout(
+    client.getToken(code),
+    10000, // 10 second timeout
+    "Exchange OAuth code for tokens"
+  );
   client.setCredentials(tokens);
 
   return { client, tokens };
@@ -69,7 +74,12 @@ export const fetchGoogleProfile = async (client: ReturnType<typeof createOAuthCl
     auth: client,
   });
 
-  const { data } = await oauth2.userinfo.get();
+  // Add timeout to prevent hanging - 10 seconds should be enough for profile fetch
+  const { data } = await withTimeout(
+    oauth2.userinfo.get(),
+    10000, // 10 second timeout
+    "Fetch Google user profile"
+  );
   return data;
 };
 
