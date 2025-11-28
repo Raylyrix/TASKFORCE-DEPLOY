@@ -242,7 +242,7 @@ const ensureAnimationStyles = () => {
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.2);
 }
 .taskforce-window--active .taskforce-window-header {
-  background: linear-gradient(135deg, rgba(52, 168, 83, 0.95), rgba(26, 115, 232, 0.95));
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95), rgba(26, 115, 232, 0.95));
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.32);
 }
 .taskforce-window--minimized .taskforce-window-header {

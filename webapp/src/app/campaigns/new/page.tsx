@@ -23,7 +23,9 @@ import {
   Link as LinkIcon,
   Plus,
   X,
+  Info,
 } from "lucide-react";
+import { EmailBestPracticesModal } from "@/components/EmailBestPracticesModal";
 
 type StepId = "audience" | "email" | "schedule" | "review";
 
@@ -56,6 +58,7 @@ export default function NewCampaignPage() {
   const [showPreview, setShowPreview] = useState(true);
   const [selectedMeetingType, setSelectedMeetingType] = useState<string | null>(null);
   const [meetingLink, setMeetingLink] = useState<string | null>(null);
+  const [showBestPractices, setShowBestPractices] = useState(false);
 
   const { data: meetingTypes } = useQuery({
     queryKey: ["meeting-types"],
@@ -243,9 +246,18 @@ export default function NewCampaignPage() {
     <Layout>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Create Campaign</h1>
-          <p className="text-gray-600 mt-1">Build and launch your email campaign</p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Create Campaign</h1>
+            <p className="text-gray-600 mt-1">Build and launch your email campaign</p>
+          </div>
+          <button
+            onClick={() => setShowBestPractices(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
+          >
+            <Info className="w-5 h-5" />
+            <span className="font-medium">Best Practices</span>
+          </button>
         </div>
 
         {/* Step Indicator */}
@@ -652,6 +664,12 @@ export default function NewCampaignPage() {
           )}
         </div>
       </div>
+
+      {/* Best Practices Modal */}
+      <EmailBestPracticesModal
+        isOpen={showBestPractices}
+        onClose={() => setShowBestPractices(false)}
+      />
     </Layout>
   );
 }
