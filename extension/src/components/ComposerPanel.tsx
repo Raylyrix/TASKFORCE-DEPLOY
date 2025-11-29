@@ -1442,7 +1442,7 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
               onChange={async (e) => {
                 const files = Array.from(e.target.files || []);
                 const MAX_SIZE = 25 * 1024 * 1024; // 25MB
-                const newAttachments: typeof attachments = [];
+                const newAttachments: Array<{ filename: string; content: string; contentType?: string; size?: number }> = [];
 
                 for (const file of files) {
                   if (file.size > MAX_SIZE) {
