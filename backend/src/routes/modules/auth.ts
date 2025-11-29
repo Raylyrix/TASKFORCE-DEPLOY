@@ -139,62 +139,57 @@ authRouter.get("/google/callback", async (req, res) => {
   // Check for explicit source parameter first
   const hasExplicitSource = source === "extension";
   
-  // Check state to determine source (MOST RELIABLE - stored when OAuth started)
-  // This is the primary source of truth since it was set at OAuth start
+  // Check state to determine source (ABSOLUTE TRUTH - stored when OAuth started)
+  // This is the SINGLE source of truth - state source field is authoritative
   let detectedSource: "extension" | "webapp" | null = null;
+  let stateEntry = null;
   if (state && typeof state === "string") {
-    const stateEntry = oauthStateStore.peek(state);
+    stateEntry = oauthStateStore.peek(state);
     if (stateEntry?.source) {
       detectedSource = stateEntry.source;
-      logger.info({ state, source: detectedSource }, "OAuth callback - source from state");
+      logger.info({ state, source: detectedSource }, "OAuth callback - source from state (ABSOLUTE TRUTH)");
     }
   }
   
-  // Extension detection fallback logic (if state doesn't have source):
-  // - Extension opens OAuth in a new tab directly (no referer or referer is from Google)
-  // - Webapp redirects from its own domain (has referer from webapp)
-  const isFromGoogle = referer.includes("accounts.google.com") || referer.includes("google.com");
-  const isFromWebapp = referer.includes("taskforce-webapp") || referer.includes("railway.app");
-  
-  // Better detection: Check Origin header (webapp sends it, extension doesn't)
-  const origin = req.get("Origin") || "";
-  const hasWebappOrigin = origin.includes("taskforce-webapp") || origin.includes("railway.app");
-  
-  // Extension: no Origin header AND (no referer or Google referer) AND not explicitly from webapp
-  const isExtensionByReferer = !hasWebappOrigin && (isFromGoogle || !referer) && !isFromWebapp;
-  
-  // Final determination: 
-  // 1. State source field (stored when OAuth started - MOST RELIABLE, use this first!)
-  // 2. Explicit source parameter (fallback)
-  // 3. Origin/referer analysis (last resort)
-  // CRITICAL: If state says "webapp", ALWAYS treat as webapp (skip extension logic)
+  // DETERMINATION: Trust state source absolutely, only use fallback if state is missing/invalid
   let isExtension = false;
   
   if (detectedSource === "webapp") {
-    // State explicitly says webapp - NEVER treat as extension
+    // State explicitly says webapp - ALWAYS treat as webapp, no exceptions
     isExtension = false;
-    logger.info({ state, detectedSource }, "OAuth callback - state says webapp, treating as webapp");
+    logger.info({ state, detectedSource }, "OAuth callback - state says webapp, treating as webapp (ABSOLUTE)");
   } else if (detectedSource === "extension") {
-    // State explicitly says extension
+    // State explicitly says extension - ALWAYS treat as extension, no exceptions
     isExtension = true;
-    logger.info({ state, detectedSource }, "OAuth callback - state says extension, treating as extension");
+    logger.info({ state, detectedSource }, "OAuth callback - state says extension, treating as extension (ABSOLUTE)");
   } else {
-    // State doesn't have source or is null - use fallback detection
-    isExtension = hasExplicitSource || (isExtensionByReferer && !hasWebappOrigin);
-    logger.info({ state, detectedSource, hasExplicitSource, isExtensionByReferer, hasWebappOrigin, isExtension }, "OAuth callback - using fallback detection");
+    // State is missing or invalid - only use fallback in this case
+    // This should be rare - state should always have source from OAuth start
+    logger.warn({ 
+      state, 
+      stateEntry: stateEntry ? "exists but no source" : "missing",
+      hasExplicitSource: source === "extension"
+    }, "OAuth callback - state missing source, using minimal fallback");
+    
+    // Minimal fallback: only check explicit source parameter
+    // Do NOT use unreliable referer/origin headers
+    isExtension = source === "extension";
+    
+    // If still can't determine and state exists, log error
+    if (!stateEntry && !isExtension) {
+      logger.error({ state, source }, "OAuth callback - cannot determine source, defaulting to webapp");
+    }
   }
   
   logger.info({ 
     state, 
     detectedSource,
-    hasExplicitSource,
-    isExtensionByReferer,
-    hasWebappOrigin,
-    isFromWebapp,
     isExtension,
-    referer,
-    origin
-  }, "OAuth callback - final detection");
+    source: source || "none",
+    stateHasSource: detectedSource !== null,
+    referer: referer || "none",
+    origin: req.get("Origin") || "none"
+  }, "OAuth callback - final detection (state source is absolute truth)");
   
   // If there's an error from Google
   if (error) {
