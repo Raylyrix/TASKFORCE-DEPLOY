@@ -50,16 +50,25 @@ authRouter.post("/google/start", (req, res, next) => {
     // Extension also provides it, but we can distinguish by checking if it's a direct backend call
     // Extension calls come from chrome-extension:// context, webapp from webapp domain
     
-    // Default: If redirectUri is provided, assume webapp unless we detect extension explicitly
-    // Extension detection: check for chrome extension patterns or missing webapp indicators
+    // Detection logic:
+    // 1. If we have explicit webapp indicators (Origin/Referer/Forwarded-Host), it's webapp
+    // 2. If redirectUri is provided AND no chrome-extension origin, likely webapp
+    // 3. Default to webapp if redirectUri is provided (safer default - webapp always provides it)
+    // 4. Only treat as extension if we have explicit extension indicators
+    
+    // Check for explicit extension indicators
+    const hasExtensionOrigin = origin.includes("chrome-extension://");
+    
+    // Determine if it's webapp
     const isFromWebapp = 
       hasWebappOrigin ||
       hasWebappReferer ||
       hasWebappForwardedHost ||
-      // If redirectUri is provided (which both do), check if it's explicitly from webapp context
-      (redirectUri && !origin.includes("chrome-extension"));
+      // If redirectUri is provided and not from extension, assume webapp
+      (redirectUri && !hasExtensionOrigin);
     
-    const source = isFromWebapp ? "webapp" : "extension";
+    // Default to webapp if we can't determine (safer default since extension should be explicit)
+    const source = (isFromWebapp || redirectUri) && !hasExtensionOrigin ? "webapp" : "extension";
     
     logger.info({ 
       origin, 
