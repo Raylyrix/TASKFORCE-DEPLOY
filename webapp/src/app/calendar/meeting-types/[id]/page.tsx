@@ -287,8 +287,13 @@ export default function MeetingTypeDetailPage() {
                           : ""
                       }
                       onChange={(e) => {
-                        const date = e.target.value ? new Date(e.target.value).toISOString() : "";
-                        setSlotForm({ ...slotForm, endTime: date });
+                        if (e.target.value) {
+                          // Convert local datetime to ISO string
+                          const localDate = new Date(e.target.value);
+                          setSlotForm({ ...slotForm, endTime: localDate.toISOString() });
+                        } else {
+                          setSlotForm({ ...slotForm, endTime: "" });
+                        }
                       }}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
