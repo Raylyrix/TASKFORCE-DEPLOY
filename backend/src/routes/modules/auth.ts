@@ -23,14 +23,55 @@ authRouter.post("/google/start", (req, res, next) => {
     const fallbackRedirect = googleAuthService.getDefaultExtensionRedirect();
     const effectiveRedirect = redirectUri ?? fallbackRedirect ?? undefined;
     
-    // Detect source from request origin/referer
+    // Detect source from request origin/referer/headers
+    // When webapp calls through Next.js rewrites, we need to check multiple headers
     const origin = req.get("Origin") || "";
     const referer = req.get("Referer") || "";
-    const isFromWebapp = origin.includes("taskforce-webapp") || 
-                         origin.includes("railway.app") ||
-                         referer.includes("taskforce-webapp") ||
-                         referer.includes("railway.app");
+    const forwardedHost = req.get("X-Forwarded-Host") || "";
+    const host = req.get("Host") || "";
+    
+    // Key insight: Webapp ALWAYS provides redirectUri in the request body
+    // Extension provides redirectUri too, but we can check other indicators
+    // If redirectUri is provided and matches backend callback pattern, it's likely webapp
+    // Extension requests come directly from extension context (different origin patterns)
+    
+    // Check multiple indicators for webapp
+    const hasWebappOrigin = 
+      origin.includes("taskforce-webapp") || 
+      origin.includes("railway.app");
+    const hasWebappReferer = 
+      referer.includes("taskforce-webapp") ||
+      referer.includes("railway.app");
+    const hasWebappForwardedHost = 
+      forwardedHost.includes("taskforce-webapp") ||
+      forwardedHost.includes("railway.app");
+    
+    // If redirectUri is provided, it's more likely from webapp (webapp always provides it)
+    // Extension also provides it, but we can distinguish by checking if it's a direct backend call
+    // Extension calls come from chrome-extension:// context, webapp from webapp domain
+    
+    // Default: If redirectUri is provided, assume webapp unless we detect extension explicitly
+    // Extension detection: check for chrome extension patterns or missing webapp indicators
+    const isFromWebapp = 
+      hasWebappOrigin ||
+      hasWebappReferer ||
+      hasWebappForwardedHost ||
+      // If redirectUri is provided (which both do), check if it's explicitly from webapp context
+      (redirectUri && !origin.includes("chrome-extension"));
+    
     const source = isFromWebapp ? "webapp" : "extension";
+    
+    logger.info({ 
+      origin, 
+      referer, 
+      forwardedHost, 
+      host,
+      redirectUri,
+      source,
+      hasWebappOrigin,
+      hasWebappReferer,
+      hasWebappForwardedHost
+    }, "OAuth start - source detection");
     
     const { state, expiresAt } = oauthStateStore.create({ 
       redirectUri: effectiveRedirect,
@@ -68,12 +109,14 @@ authRouter.get("/google/callback", async (req, res) => {
   // Check for explicit source parameter first
   const hasExplicitSource = source === "extension";
   
-  // Check state to determine source (most reliable - stored when OAuth started)
-  let isExtensionByState = false;
+  // Check state to determine source (MOST RELIABLE - stored when OAuth started)
+  // This is the primary source of truth since it was set at OAuth start
+  let detectedSource: "extension" | "webapp" | null = null;
   if (state && typeof state === "string") {
     const stateEntry = oauthStateStore.peek(state);
     if (stateEntry?.source) {
-      isExtensionByState = stateEntry.source === "extension";
+      detectedSource = stateEntry.source;
+      logger.info({ state, source: detectedSource }, "OAuth callback - source from state");
     }
   }
   
@@ -91,10 +134,37 @@ authRouter.get("/google/callback", async (req, res) => {
   const isExtensionByReferer = !hasWebappOrigin && (isFromGoogle || !referer) && !isFromWebapp;
   
   // Final determination: 
-  // 1. Explicit source parameter (most reliable)
-  // 2. State source field (stored when OAuth started - very reliable)
-  // 3. Origin/referer analysis (fallback)
-  const isExtension = hasExplicitSource || (state && typeof state === "string" && oauthStateStore.peek(state)?.source === "extension") || (isExtensionByReferer && !hasWebappOrigin);
+  // 1. State source field (stored when OAuth started - MOST RELIABLE, use this first!)
+  // 2. Explicit source parameter (fallback)
+  // 3. Origin/referer analysis (last resort)
+  // CRITICAL: If state says "webapp", ALWAYS treat as webapp (skip extension logic)
+  let isExtension = false;
+  
+  if (detectedSource === "webapp") {
+    // State explicitly says webapp - NEVER treat as extension
+    isExtension = false;
+    logger.info({ state, detectedSource }, "OAuth callback - state says webapp, treating as webapp");
+  } else if (detectedSource === "extension") {
+    // State explicitly says extension
+    isExtension = true;
+    logger.info({ state, detectedSource }, "OAuth callback - state says extension, treating as extension");
+  } else {
+    // State doesn't have source or is null - use fallback detection
+    isExtension = hasExplicitSource || (isExtensionByReferer && !hasWebappOrigin);
+    logger.info({ state, detectedSource, hasExplicitSource, isExtensionByReferer, hasWebappOrigin, isExtension }, "OAuth callback - using fallback detection");
+  }
+  
+  logger.info({ 
+    state, 
+    detectedSource,
+    hasExplicitSource,
+    isExtensionByReferer,
+    hasWebappOrigin,
+    isFromWebapp,
+    isExtension,
+    referer,
+    origin
+  }, "OAuth callback - final detection");
   
   // If there's an error from Google
   if (error) {
