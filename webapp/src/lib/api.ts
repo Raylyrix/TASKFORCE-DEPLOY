@@ -249,6 +249,83 @@ export const api = {
         method: "PUT",
         body: data,
       }),
+    getMeetingType: (id: string) =>
+      apiRequest<{
+        id: string;
+        name: string;
+        description?: string;
+        durationMinutes: number;
+        isActive: boolean;
+        meetingLocationType: string;
+        meetingLocationValue?: string;
+        bookingLinks: Array<{ id: string; name: string; token: string; isPublic: boolean }>;
+      }>(`/api/calendar/meeting-types/${id}`),
+    // Slot management
+    getSlots: (meetingTypeId: string) =>
+      apiRequest<{
+        slots: Array<{
+          id: string;
+          startTime: string;
+          endTime: string;
+          isRecurring: boolean;
+          recurrenceRule?: string;
+          timeZone: string;
+          isActive: boolean;
+          notes?: string;
+        }>;
+      }>(`/api/calendar/meeting-types/${meetingTypeId}/slots`),
+    createSlot: (meetingTypeId: string, data: {
+      startTime: string;
+      endTime: string;
+      isRecurring?: boolean;
+      recurrenceRule?: string;
+      timeZone: string;
+      isActive?: boolean;
+      notes?: string;
+    }) =>
+      apiRequest<{
+        slot: {
+          id: string;
+          startTime: string;
+          endTime: string;
+          isRecurring: boolean;
+          recurrenceRule?: string;
+          timeZone: string;
+          isActive: boolean;
+          notes?: string;
+        };
+      }>(`/api/calendar/meeting-types/${meetingTypeId}/slots`, {
+        method: "POST",
+        body: data,
+      }),
+    updateSlot: (meetingTypeId: string, slotId: string, data: {
+      startTime?: string;
+      endTime?: string;
+      isRecurring?: boolean;
+      recurrenceRule?: string;
+      timeZone?: string;
+      isActive?: boolean;
+      notes?: string;
+    }) =>
+      apiRequest<{
+        slot: {
+          id: string;
+          startTime: string;
+          endTime: string;
+          isRecurring: boolean;
+          recurrenceRule?: string;
+          timeZone: string;
+          isActive: boolean;
+          notes?: string;
+        };
+      }>(`/api/calendar/meeting-types/${meetingTypeId}/slots/${slotId}`, {
+        method: "PUT",
+        body: data,
+      }),
+    deleteSlot: (meetingTypeId: string, slotId: string) =>
+      apiRequest<{ success: boolean }>(`/api/calendar/meeting-types/${meetingTypeId}/slots/${slotId}`, {
+        method: "DELETE",
+      }),
     getEvents: (options?: { start?: string; end?: string; calendarId?: string; region?: string }) => {
       const params = new URLSearchParams();
       if (options?.start) params.append("start", options.start);

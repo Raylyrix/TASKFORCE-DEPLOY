@@ -461,6 +461,49 @@ calendarRouter.post("/meeting-types", requireUser, async (req, res, next) => {
   }
 });
 
+calendarRouter.get("/meeting-types/:meetingTypeId", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { meetingTypeId } = req.params;
+
+    const meetingType = await prisma.meetingType.findUnique({
+      where: { id: meetingTypeId },
+      include: {
+        bookingLinks: {
+          select: {
+            id: true,
+            name: true,
+            token: true,
+            isPublic: true,
+          },
+        },
+      },
+    });
+
+    if (!meetingType || meetingType.userId !== req.currentUser.id) {
+      res.status(404).json({ error: "Meeting type not found" });
+      return;
+    }
+
+    res.status(200).json({
+      id: meetingType.id,
+      name: meetingType.name,
+      description: meetingType.description,
+      durationMinutes: meetingType.durationMinutes,
+      isActive: meetingType.isActive,
+      meetingLocationType: meetingType.meetingLocationType,
+      meetingLocationValue: meetingType.meetingLocationValue,
+      bookingLinks: meetingType.bookingLinks,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 calendarRouter.put("/meeting-types/:meetingTypeId", requireUser, async (req, res, next) => {
   try {
     if (!req.currentUser) {
