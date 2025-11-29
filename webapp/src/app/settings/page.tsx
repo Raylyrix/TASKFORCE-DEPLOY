@@ -17,6 +17,8 @@ import {
   Mail,
   Globe,
   Clock,
+  Download,
+  Package,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -134,6 +136,12 @@ export default function SettingsPage() {
           {activeTab === "notifications" && <NotificationsTab />}
 
           {activeTab === "account" && <AccountTab onLogout={handleLogout} />}
+          
+          {activeTab === "profile" && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <ExtensionDownloadSection />
+            </div>
+          )}
         </div>
       </div>
     </Layout>
@@ -418,6 +426,65 @@ function NotificationsTab() {
             <Save className="w-4 h-4" />
             Save Preferences
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtensionDownloadSection() {
+  const handleDownload = () => {
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement("a");
+    link.href = "/taskforce-extension.zip";
+    link.download = "taskforce-extension.zip";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+      <div className="flex items-start gap-4">
+        <div className="p-3 bg-blue-100 rounded-lg">
+          <Package className="w-6 h-6 text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Chrome Extension</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Download the TaskForce Chrome extension to compose campaigns directly from Gmail. 
+            The extension integrates seamlessly with your Gmail account and allows you to create 
+            and manage email campaigns without leaving your inbox.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              <Download className="w-4 h-4" />
+              Download Extension
+            </button>
+            <a
+              href="/INSTALLATION_GUIDE.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-700 underline"
+            >
+              Installation Guide
+            </a>
+          </div>
+          <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
+            <p className="text-xs text-gray-600">
+              <strong>Installation Steps:</strong>
+            </p>
+            <ol className="text-xs text-gray-600 mt-2 space-y-1 list-decimal list-inside">
+              <li>Extract the downloaded zip file</li>
+              <li>Open Chrome and navigate to <code className="bg-gray-100 px-1 rounded">chrome://extensions/</code></li>
+              <li>Enable "Developer mode" (toggle in top right)</li>
+              <li>Click "Load unpacked" and select the extracted folder</li>
+              <li>Click the extension icon and connect your Google account</li>
+            </ol>
+          </div>
         </div>
       </div>
     </div>
