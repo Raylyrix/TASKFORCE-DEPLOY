@@ -23,8 +23,9 @@ const variantStyles: Record<ButtonVariant, CSSProperties> = {
     color: "#ffffff",
   },
   secondary: {
-    backgroundColor: "#f1f3f4",
+    backgroundColor: "#f8f9fa",
     color: "#202124",
+    border: "1px solid #dadce0",
   },
   ghost: {
     backgroundColor: "transparent",

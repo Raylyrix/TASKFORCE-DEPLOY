@@ -118,20 +118,21 @@ const Section = ({
     style={{
       border: "1px solid #e8eaed",
       borderRadius: "12px",
-      padding: "20px",
+      padding: "24px",
       display: "flex",
       flexDirection: "column",
-      gap: "16px",
+      gap: "20px",
       backgroundColor: "#fff",
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
     }}
   >
     <header>
-      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "#202124", lineHeight: "1.4" }}>{title}</h3>
+      <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 600, color: "#202124", lineHeight: "1.4", letterSpacing: "-0.01em" }}>{title}</h3>
       {description ? (
-        <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#5f6368", lineHeight: "1.5" }}>{description}</p>
+        <p style={{ margin: "8px 0 0", fontSize: "14px", color: "#5f6368", lineHeight: "1.5" }}>{description}</p>
       ) : null}
     </header>
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>{children}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>{children}</div>
   </section>
 );
 

@@ -62,7 +62,7 @@ const windowConfigs: WindowConfig[] = [
     sidebarIcon: "✉️",
     allowMultiple: true,
     contentId: "taskforce-floating-composer-content",
-    render: (root) => root.render(<ComposerApp />),
+    render: (root, isFresh?: boolean) => root.render(<ComposerApp isFreshInstance={isFresh} />),
   },
   {
     id: FLOATING_FOLLOWUPS_ID,
@@ -663,7 +663,7 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   setWindowVisibility(instanceId, true);
 };
 
-const createWindowInstance = (config: WindowConfig, state: StoredWindowState) => {
+const createWindowInstance = (config: WindowConfig, state: StoredWindowState, isFresh?: boolean) => {
   const existing = document.getElementById(state.instanceId) as HTMLDivElement | null;
   if (existing) {
     existing.remove();
@@ -863,7 +863,7 @@ const createWindowInstance = (config: WindowConfig, state: StoredWindowState) =>
   let root: Root;
   try {
     root = createRoot(content);
-    config.render(root);
+    config.render(root, isFresh);
     console.log(`[TaskForce] Window "${config.title}" rendered successfully`);
   } catch (error) {
     console.error(`[TaskForce] Failed to render window "${config.title}":`, error);
