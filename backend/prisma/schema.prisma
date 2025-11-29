@@ -128,16 +128,38 @@ model MeetingType {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  calendarConnection CalendarConnection? @relation(fields: [calendarConnectionId], references: [id])
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendarConnection CalendarConnection?      @relation(fields: [calendarConnectionId], references: [id])
   bookingLinks       BookingLink[]
   bookings           MeetingBooking[]
   reminders          MeetingReminder[]
+  customSlots        CustomAvailabilitySlot[]
 
   @@index([userId])
   @@index([userId, isActive])
   @@index([slug])
   @@index([calendarConnectionId])
+}
+
+model CustomAvailabilitySlot {
+  id             String   @id @default(cuid())
+  meetingTypeId  String
+  startTime      DateTime
+  endTime        DateTime
+  isRecurring    Boolean  @default(false)
+  recurrenceRule String? // e.g., "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"
+  timeZone       String
+  isActive       Boolean  @default(true)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  meetingType MeetingType @relation(fields: [meetingTypeId], references: [id], onDelete: Cascade)
+
+  @@index([meetingTypeId])
+  @@index([meetingTypeId, startTime, endTime])
+  @@index([isActive])
+  @@index([startTime, endTime])
 }
 
 model BookingLink {
@@ -574,21 +596,21 @@ model EmailAssignment {
 }
 
 model Workflow {
-  id          String         @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   name        String
   description String?
-  trigger     Json           // Trigger configuration
-  nodes       Json           // Workflow nodes (visual representation)
-  edges       Json           // Workflow edges (connections)
-  isActive    Boolean        @default(true)
-  runCount    Int            @default(0)
+  trigger     Json // Trigger configuration
+  nodes       Json // Workflow nodes (visual representation)
+  edges       Json // Workflow edges (connections)
+  isActive    Boolean   @default(true)
+  runCount    Int       @default(0)
   lastRunAt   DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions   WorkflowExecution[]
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
 
   @@index([userId])
   @@index([userId, isActive])
@@ -596,16 +618,16 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id         String              @id @default(cuid())
-  workflowId String
-  status     WorkflowExecutionStatus @default(RUNNING)
-  context    Json                // Execution context (data passed through workflow)
-  currentNodeId String?         // Current node being executed
-  error      String?
-  startedAt  DateTime            @default(now())
-  completedAt DateTime?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  id            String                  @id @default(cuid())
+  workflowId    String
+  status        WorkflowExecutionStatus @default(RUNNING)
+  context       Json // Execution context (data passed through workflow)
+  currentNodeId String? // Current node being executed
+  error         String?
+  startedAt     DateTime                @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 
   workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 

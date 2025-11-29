@@ -20,6 +20,22 @@ import {
 
 export const calendarRouter = Router();
 
+// Custom Availability Slot Management
+const customSlotSchema = z.object({
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  isRecurring: z.boolean().default(false),
+  recurrenceRule: z.string().optional(),
+  timeZone: z.string(),
+  isActive: z.boolean().default(true),
+  notes: z.string().max(500).optional(),
+});
+
+const customSlotUpdateSchema = customSlotSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: "Update payload cannot be empty" }
+);
+
 const ensureStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 
@@ -840,6 +856,213 @@ calendarRouter.delete("/events/:eventId", requireUser, async (req, res, next) =>
     } catch (error) {
       // Cache error is non-critical, continue
     }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Custom Availability Slot Management
+const customSlotSchema = z.object({
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime(),
+  isRecurring: z.boolean().default(false),
+  recurrenceRule: z.string().optional(),
+  timeZone: z.string(),
+  isActive: z.boolean().default(true),
+  notes: z.string().max(500).optional(),
+});
+
+const customSlotUpdateSchema = customSlotSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: "Update payload cannot be empty" }
+);
+
+// Get all custom slots for a meeting type
+calendarRouter.get("/meeting-types/:meetingTypeId/slots", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { meetingTypeId } = req.params;
+
+    const meetingType = await prisma.meetingType.findUnique({
+      where: { id: meetingTypeId },
+    });
+
+    if (!meetingType || meetingType.userId !== req.currentUser.id) {
+      res.status(404).json({ error: "Meeting type not found" });
+      return;
+    }
+
+    const slots = await prisma.customAvailabilitySlot.findMany({
+      where: { meetingTypeId },
+      orderBy: { startTime: "asc" },
+    });
+
+    res.status(200).json({ slots });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create a custom availability slot
+calendarRouter.post("/meeting-types/:meetingTypeId/slots", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { meetingTypeId } = req.params;
+    const payload = customSlotSchema.parse(req.body ?? {});
+
+    const meetingType = await prisma.meetingType.findUnique({
+      where: { id: meetingTypeId },
+    });
+
+    if (!meetingType || meetingType.userId !== req.currentUser.id) {
+      res.status(404).json({ error: "Meeting type not found" });
+      return;
+    }
+
+    const startTime = new Date(payload.startTime);
+    const endTime = new Date(payload.endTime);
+
+    if (startTime >= endTime) {
+      res.status(400).json({ error: "Start time must be before end time" });
+      return;
+    }
+
+    const slot = await prisma.customAvailabilitySlot.create({
+      data: {
+        meetingTypeId,
+        startTime,
+        endTime,
+        isRecurring: payload.isRecurring,
+        recurrenceRule: payload.recurrenceRule ?? null,
+        timeZone: payload.timeZone,
+        isActive: payload.isActive,
+        notes: payload.notes ?? null,
+      },
+    });
+
+    res.status(201).json({ slot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update a custom availability slot
+calendarRouter.put("/meeting-types/:meetingTypeId/slots/:slotId", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { meetingTypeId, slotId } = req.params;
+    const payload = customSlotUpdateSchema.parse(req.body ?? {});
+
+    const meetingType = await prisma.meetingType.findUnique({
+      where: { id: meetingTypeId },
+    });
+
+    if (!meetingType || meetingType.userId !== req.currentUser.id) {
+      res.status(404).json({ error: "Meeting type not found" });
+      return;
+    }
+
+    const slot = await prisma.customAvailabilitySlot.findUnique({
+      where: { id: slotId },
+    });
+
+    if (!slot || slot.meetingTypeId !== meetingTypeId) {
+      res.status(404).json({ error: "Slot not found" });
+      return;
+    }
+
+    const updateData: {
+      startTime?: Date;
+      endTime?: Date;
+      isRecurring?: boolean;
+      recurrenceRule?: string | null;
+      timeZone?: string;
+      isActive?: boolean;
+      notes?: string | null;
+    } = {};
+
+    if (payload.startTime) updateData.startTime = new Date(payload.startTime);
+    if (payload.endTime) updateData.endTime = new Date(payload.endTime);
+    if (payload.isRecurring !== undefined) updateData.isRecurring = payload.isRecurring;
+    if (payload.recurrenceRule !== undefined) updateData.recurrenceRule = payload.recurrenceRule ?? null;
+    if (payload.timeZone) updateData.timeZone = payload.timeZone;
+    if (payload.isActive !== undefined) updateData.isActive = payload.isActive;
+    if (payload.notes !== undefined) updateData.notes = payload.notes ?? null;
+
+    // Validate time range if both times are being updated
+    if (updateData.startTime && updateData.endTime) {
+      if (updateData.startTime >= updateData.endTime) {
+        res.status(400).json({ error: "Start time must be before end time" });
+        return;
+      }
+    } else if (updateData.startTime && slot.endTime) {
+      if (updateData.startTime >= slot.endTime) {
+        res.status(400).json({ error: "Start time must be before end time" });
+        return;
+      }
+    } else if (updateData.endTime && slot.startTime) {
+      if (slot.startTime >= updateData.endTime) {
+        res.status(400).json({ error: "Start time must be before end time" });
+        return;
+      }
+    }
+
+    const updatedSlot = await prisma.customAvailabilitySlot.update({
+      where: { id: slotId },
+      data: updateData,
+    });
+
+    res.status(200).json({ slot: updatedSlot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Delete a custom availability slot
+calendarRouter.delete("/meeting-types/:meetingTypeId/slots/:slotId", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { meetingTypeId, slotId } = req.params;
+
+    const meetingType = await prisma.meetingType.findUnique({
+      where: { id: meetingTypeId },
+    });
+
+    if (!meetingType || meetingType.userId !== req.currentUser.id) {
+      res.status(404).json({ error: "Meeting type not found" });
+      return;
+    }
+
+    const slot = await prisma.customAvailabilitySlot.findUnique({
+      where: { id: slotId },
+    });
+
+    if (!slot || slot.meetingTypeId !== meetingTypeId) {
+      res.status(404).json({ error: "Slot not found" });
+      return;
+    }
+
+    await prisma.customAvailabilitySlot.delete({
+      where: { id: slotId },
+    });
 
     res.status(200).json({ success: true });
   } catch (error) {
