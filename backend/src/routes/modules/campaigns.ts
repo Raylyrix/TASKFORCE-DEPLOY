@@ -12,6 +12,13 @@ export const campaignsRouter = Router();
 
 const recipientRecordSchema = z.record(z.string(), z.string());
 
+const attachmentSchema = z.object({
+  filename: z.string().min(1),
+  content: z.string().min(1), // Base64-encoded file content
+  contentType: z.string().optional(), // MIME type
+  size: z.number().optional(), // File size in bytes
+});
+
 const createCampaignSchema = z.object({
   name: z.string().min(1),
   sheetSourceId: z.string().optional(),
@@ -28,6 +35,7 @@ const createCampaignSchema = z.object({
       template: z.object({
         subject: z.string().min(1),
         html: z.string().min(1),
+        attachments: z.array(attachmentSchema).optional().default([]), // File attachments
       }),
     })
     .optional(),

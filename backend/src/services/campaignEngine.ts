@@ -57,6 +57,13 @@ const htmlToText = (html: string): string => {
     .trim();
 };
 
+export type Attachment = {
+  filename: string;
+  content: string; // Base64-encoded file content
+  contentType?: string; // MIME type
+  size?: number; // File size in bytes
+};
+
 export type SendStrategy = {
   startAt: string;
   delayMsBetweenEmails: number;
@@ -65,6 +72,7 @@ export type SendStrategy = {
   template: {
     subject: string;
     html: string;
+    attachments?: Attachment[]; // File attachments
   };
 };
 
@@ -88,6 +96,7 @@ export type FollowUpStepConfig = {
   sendAsReply?: boolean;
   parentStepId?: string;
   isNested?: boolean;
+  attachments?: Attachment[]; // File attachments
 };
 
 export type FollowUpSequenceConfig = {
@@ -535,6 +544,7 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     template: {
       subject: subjectTemplate,
       html: htmlTemplate,
+      attachments: (strategy.template.attachments || []) as Attachment[],
     },
   };
 
@@ -598,6 +608,12 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     bodyHtml: messageContent.html,
     bodyText: htmlToText(messageContent.html), // Add plain text version
     isCampaign: true, // Mark as campaign email for proper headers
+    attachments: (sanitizedStrategy.template.attachments || []).map((att: Attachment) => ({
+      filename: att.filename,
+      content: att.content,
+      contentType: att.contentType || undefined,
+      size: att.size || undefined,
+    })),
   });
 
   await prisma.messageLog.update({
@@ -777,7 +793,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   }
 
   // Read offsetConfig to check if this is a nested follow-up
-  const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
+  const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean; attachments?: Attachment[] };
   const isNested = offsetConfig?.isNested ?? false;
   const parentStepId = offsetConfig?.parentStepId;
   const sendAsReply = offsetConfig?.sendAsReply ?? false;
@@ -1082,6 +1098,10 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     }
   }
 
+  // Get attachments from step configuration (offsetConfig already declared above)
+  const stepOffsetConfig = step.offsetConfig as { delayMs?: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean; attachments?: Attachment[] } | null;
+  const stepAttachments = (stepOffsetConfig?.attachments || []) as Attachment[];
+
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: step.sequence.campaign.userId,
     to: recipient.email,
@@ -1092,6 +1112,12 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     inReplyTo: canSendAsReply ? inReplyTo : null,
     references: canSendAsReply ? references : null,
     isCampaign: true, // Mark as campaign email for proper headers
+    attachments: stepAttachments.map((att: Attachment) => ({
+      filename: att.filename,
+      content: att.content,
+      contentType: att.contentType || undefined,
+      size: att.size || undefined,
+    })),
   });
 
   if (canSendAsReply) {

@@ -8,6 +8,13 @@ import { campaignEngine } from "../../services/campaignEngine";
 
 export const followUpsRouter = Router();
 
+const attachmentSchema = z.object({
+  filename: z.string().min(1),
+  content: z.string().min(1), // Base64-encoded file content
+  contentType: z.string().optional(), // MIME type
+  size: z.number().optional(), // File size in bytes
+});
+
 const followUpStepSchema = z.object({
   delayMs: z.number().int().min(0).optional(), // Relative delay in milliseconds
   scheduledAt: z.string().datetime().optional(), // Absolute scheduled date/time (ISO 8601)
@@ -16,6 +23,7 @@ const followUpStepSchema = z.object({
   sendAsReply: z.boolean().optional().default(false),
   parentStepId: z.string().optional(),
   isNested: z.boolean().optional().default(false),
+  attachments: z.array(attachmentSchema).optional().default([]), // File attachments
 }).refine(
   (data) => data.delayMs !== undefined || data.scheduledAt !== undefined,
   { message: "Either delayMs or scheduledAt must be provided" }
@@ -172,6 +180,12 @@ followUpsRouter.post("/", requireUser, async (req, res, next) => {
       sendAsReply: step.sendAsReply ?? false,
       parentStepId: step.parentStepId,
       isNested: step.isNested ?? false,
+      attachments: step.attachments?.map((att) => ({
+        filename: att.filename,
+        content: att.content,
+        contentType: att.contentType,
+        size: att.size,
+      })),
     }));
 
     const sequence = await campaignEngine.createFollowUpSequence(payload.campaignId, {
@@ -222,6 +236,7 @@ const manualFollowUpSchema = z.object({
   isNested: z.boolean().optional().default(false),
   campaignId: z.string().optional(), // Optional: add this follow-up to an existing campaign
   recipientEmail: z.string().email().optional(), // Required if campaignId is provided - the recipient email in the campaign
+  attachments: z.array(attachmentSchema).optional().default([]), // File attachments
 }).refine(
   (data) => !data.campaignId || data.recipientEmail,
   { message: "recipientEmail is required when campaignId is provided" }
@@ -328,6 +343,12 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
       inReplyTo: canSendAsReply ? inReplyTo : null,
       references: canSendAsReply ? references : null,
       isCampaign: false, // Manual follow-up, not a campaign
+      attachments: payload.attachments?.map((att) => ({
+        filename: att.filename,
+        content: att.content,
+        contentType: att.contentType,
+        size: att.size,
+      })),
     });
 
     // If campaignId is provided, find or create the recipient and save to message log
