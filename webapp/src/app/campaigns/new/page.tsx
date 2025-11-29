@@ -753,22 +753,22 @@ export default function NewCampaignPage() {
 
                       {/* Preview first few rows */}
                       {importResult.rows && importResult.rows.length > 0 && (
-                        <div className="mt-4 overflow-x-auto border border-gray-200 rounded-xl">
-                          <table className="w-full text-sm">
+                        <div className="mt-4 overflow-x-auto border border-gray-200 rounded-xl bg-white">
+                          <table className="w-full text-sm bg-white">
                             <thead className="bg-gray-50">
                               <tr>
                                 {importResult.columns?.slice(0, 5).map((col: string) => (
-                                  <th key={col} className="px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-200">
+                                  <th key={col} className="px-4 py-3 text-left font-semibold text-gray-900 border-b-2 border-gray-200 bg-gray-50">
                                     {col}
                                   </th>
                                 ))}
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white">
                               {importResult.rows.slice(0, 3).map((row: Record<string, string>, idx: number) => (
-                                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 bg-white">
                                   {importResult.columns?.slice(0, 5).map((col: string) => (
-                                    <td key={col} className="px-4 py-2 text-gray-600">
+                                    <td key={col} className="px-4 py-2 text-gray-900 bg-white">
                                       {String(row[col] || "")}
                                     </td>
                                   ))}

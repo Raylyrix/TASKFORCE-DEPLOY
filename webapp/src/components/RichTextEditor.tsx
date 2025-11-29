@@ -409,7 +409,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                 applyCommand("fontName", selected);
               }
             }}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white text-gray-900"
           >
             {FONT_FAMILIES.map(({ label, value: optionValue }) => (
               <option key={label} value={optionValue}>
@@ -425,7 +425,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               setFontSize(selected);
               applyCommand("fontSize", selected);
             }}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white text-gray-900"
           >
             {FONT_SIZES.map(({ label, value: optionValue }) => (
               <option key={label} value={optionValue}>
@@ -441,7 +441,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               setBlockFormat(selected);
               applyCommand("formatBlock", selected === "p" ? "div" : selected);
             }}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white text-gray-900"
           >
             {BLOCK_FORMATS.map(({ label, value: optionValue }) => (
               <option key={label} value={optionValue}>
@@ -451,25 +451,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           </select>
 
           <div className="flex gap-1 flex-wrap">
-            <ToolbarButton icon={<Bold className="w-4 h-4" />} onClick={() => applyCommand("bold")} title="Bold (Ctrl+B)" />
-            <ToolbarButton icon={<Italic className="w-4 h-4" />} onClick={() => applyCommand("italic")} title="Italic (Ctrl+I)" />
-            <ToolbarButton icon={<Underline className="w-4 h-4" />} onClick={() => applyCommand("underline")} title="Underline (Ctrl+U)" />
-            <ToolbarButton icon={<Strikethrough className="w-4 h-4" />} onClick={() => applyCommand("strikeThrough")} title="Strikethrough" />
+            <ToolbarButton icon={<Bold className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("bold")} title="Bold (Ctrl+B)" />
+            <ToolbarButton icon={<Italic className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("italic")} title="Italic (Ctrl+I)" />
+            <ToolbarButton icon={<Underline className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("underline")} title="Underline (Ctrl+U)" />
+            <ToolbarButton icon={<Strikethrough className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("strikeThrough")} title="Strikethrough" />
             <div className="w-px h-6 bg-gray-300 mx-1" />
-            <ToolbarButton icon={<AlignLeft className="w-4 h-4" />} onClick={() => applyCommand("justifyLeft")} title="Align left" />
-            <ToolbarButton icon={<AlignCenter className="w-4 h-4" />} onClick={() => applyCommand("justifyCenter")} title="Align center" />
-            <ToolbarButton icon={<AlignRight className="w-4 h-4" />} onClick={() => applyCommand("justifyRight")} title="Align right" />
+            <ToolbarButton icon={<AlignLeft className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("justifyLeft")} title="Align left" />
+            <ToolbarButton icon={<AlignCenter className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("justifyCenter")} title="Align center" />
+            <ToolbarButton icon={<AlignRight className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("justifyRight")} title="Align right" />
             <div className="w-px h-6 bg-gray-300 mx-1" />
-            <ToolbarButton icon={<List className="w-4 h-4" />} onClick={() => applyCommand("insertUnorderedList")} title="Bulleted list" />
-            <ToolbarButton icon={<ListOrdered className="w-4 h-4" />} onClick={() => applyCommand("insertOrderedList")} title="Numbered list" />
-            <ToolbarButton icon={<LinkIcon className="w-4 h-4" />} onClick={toggleLink} title="Insert link" />
-            <ToolbarButton icon={<ImageIcon className="w-4 h-4" />} onClick={insertImage} title="Insert image (URL)" />
+            <ToolbarButton icon={<List className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("insertUnorderedList")} title="Bulleted list" />
+            <ToolbarButton icon={<ListOrdered className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("insertOrderedList")} title="Numbered list" />
+            <ToolbarButton icon={<LinkIcon className="w-4 h-4 text-gray-900" />} onClick={toggleLink} title="Insert link" />
+            <ToolbarButton icon={<ImageIcon className="w-4 h-4 text-gray-900" />} onClick={insertImage} title="Insert image (URL)" />
             <div className="w-px h-6 bg-gray-300 mx-1" />
-            <ToolbarButton icon={<Type className="w-4 h-4" />} onClick={() => applyCommand("removeFormat")} title="Clear formatting" />
+            <ToolbarButton icon={<Type className="w-4 h-4 text-gray-900" />} onClick={() => applyCommand("removeFormat")} title="Clear formatting" />
           </div>
 
           <label className="inline-flex items-center gap-2 text-sm text-gray-600">
-            <Palette className="w-4 h-4" />
+            <Palette className="w-4 h-4 text-gray-600" />
             Text
             <input
               type="color"
@@ -482,15 +482,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             <select
               defaultValue=""
               onChange={handleMergeFieldSelect}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
-            >
-              <option value="">Insert merge field</option>
-              {mergeFields.map((field) => (
-                <option key={field} value={field}>
-                  {field}
-                </option>
-              ))}
-            </select>
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white text-gray-900"
+          >
+            <option value="">Insert merge field</option>
+            {mergeFields.map((field) => (
+              <option key={field} value={field}>
+                {field}
+              </option>
+            ))}
+          </select>
           )}
         </div>
 
