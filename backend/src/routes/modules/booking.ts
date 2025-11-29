@@ -57,7 +57,43 @@ export const handleBookingPage = async (req: Request, res: Response, next: NextF
   });
 
   if (!bookingLink || !bookingLink.meetingType) {
-    res.status(404).send("Booking link not found");
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <title>Booking Link Not Found</title>
+          <style>
+            body {
+              font-family: system-ui, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              margin: 0;
+              background: #f5f7fb;
+            }
+            .error-card {
+              background: white;
+              padding: 40px;
+              border-radius: 16px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              max-width: 500px;
+              text-align: center;
+            }
+            h1 { color: #dc2626; margin: 0 0 16px; font-size: 24px; }
+            p { color: #64748b; line-height: 1.6; margin: 0; }
+          </style>
+        </head>
+        <body>
+          <div class="error-card">
+            <h1>Booking Link Not Found</h1>
+            <p>The booking link you're trying to access doesn't exist or has been removed. Please check the link and try again, or contact the person who sent you this link.</p>
+          </div>
+        </body>
+      </html>
+    `);
     return;
   }
 
@@ -792,9 +828,15 @@ export const handleBookingPage = async (req: Request, res: Response, next: NextF
         } catch (error) {
           if (acceptButton) {
             acceptButton.disabled = false;
-            acceptButton.textContent = 'Book selected time';
+            acceptButton.textContent = 'Confirm booking';
           }
-          alert('Failed to book meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          if (statusMessage) {
+            statusMessage.innerHTML = '<div class="status-message error">' + escapeHtml(errorMessage) + '</div>';
+            statusMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } else {
+            alert('Failed to book meeting: ' + errorMessage);
+          }
         }
       });
 
@@ -895,7 +937,8 @@ const bookingRequestSchema = z.object({
   end: isoString,
 });
 
-bookingRouter.post("/book/:token/bookings", async (req, res, next) => {
+// Export the booking handler so it can be used in public routes
+export const handleBookingRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { token } = req.params;
     const parseResult = bookingRequestSchema.safeParse(req.body);
@@ -967,9 +1010,12 @@ bookingRouter.post("/book/:token/bookings", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-bookingRouter.post("/book/:token/reminders", async (req, res, next) => {
+bookingRouter.post("/book/:token/bookings", handleBookingRequest);
+
+// Export the reminder handler so it can be used in public routes
+export const handleReminderRequest = async (req: Request, res: Response, next: NextFunction) => {
   const parseResult = reminderRequestSchema.safeParse(req.body);
   if (!parseResult.success) {
     res.status(400).json({ error: "Invalid request", details: parseResult.error.flatten() });
@@ -1038,7 +1084,9 @@ bookingRouter.post("/book/:token/reminders", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
+
+bookingRouter.post("/book/:token/reminders", handleReminderRequest);
 
 // Helper function to derive booking URL (matches the one in meetingReminders.ts but uses public route)
 const deriveBookingUrl = (token: string): string => {

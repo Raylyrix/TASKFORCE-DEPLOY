@@ -89,6 +89,26 @@ export const createApp = () => {
     }
   });
 
+  // Public booking API routes (without /api prefix to match the booking page JavaScript)
+  // These routes are used by the booking page to submit bookings and reminders
+  app.post("/book/:token/bookings", async (req, res, next) => {
+    try {
+      const { handleBookingRequest } = await import("./routes/modules/booking.js");
+      await handleBookingRequest(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/book/:token/reminders", async (req, res, next) => {
+    try {
+      const { handleReminderRequest } = await import("./routes/modules/booking.js");
+      await handleReminderRequest(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // Health check endpoints
   app.get("/health", healthCheck);
   app.get("/ready", readinessCheck);
