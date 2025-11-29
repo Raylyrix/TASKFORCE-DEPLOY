@@ -14,8 +14,10 @@ export const AuthCard = ({ isConnecting, onConnect, backendUrl }: AuthCardProps)
     <Card>
       <h2
         style={{
-          fontSize: "18px",
-          marginBottom: "12px",
+          fontSize: "20px",
+          fontWeight: 600,
+          marginBottom: "8px",
+          color: "#202124",
         }}
       >
         Connect Google Workspace
@@ -24,8 +26,8 @@ export const AuthCard = ({ isConnecting, onConnect, backendUrl }: AuthCardProps)
         style={{
           color: "#5f6368",
           fontSize: "14px",
-          lineHeight: 1.5,
-          marginBottom: "16px",
+          lineHeight: 1.6,
+          marginBottom: "20px",
         }}
       >
         {isProduction ? (

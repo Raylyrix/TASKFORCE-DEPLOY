@@ -3,29 +3,33 @@ import type { ButtonHTMLAttributes, CSSProperties, PropsWithChildren } from "rea
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const baseStyles: CSSProperties = {
-  padding: "10px 16px",
+  padding: "10px 20px",
   borderRadius: "8px",
-  fontWeight: 600,
+  fontWeight: 500,
   cursor: "pointer",
-  transition: "opacity 0.15s ease",
+  transition: "all 0.2s ease",
   fontSize: "14px",
+  lineHeight: "1.5",
+  border: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
 };
 
 const variantStyles: Record<ButtonVariant, CSSProperties> = {
   primary: {
-    backgroundColor: "#0b57d0",
+    backgroundColor: "#1a73e8",
     color: "#ffffff",
-    border: "none",
   },
   secondary: {
     backgroundColor: "#f1f3f4",
-    color: "#1f1f1f",
-    border: "none",
+    color: "#202124",
   },
   ghost: {
     backgroundColor: "transparent",
-    color: "#0b57d0",
-    border: "1px solid #0b57d0",
+    color: "#1a73e8",
+    border: "1px solid #dadce0",
   },
 };
 

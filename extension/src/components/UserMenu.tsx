@@ -50,12 +50,12 @@ export const UserMenu = ({
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          padding: "6px 12px",
+          padding: "8px 12px",
           borderRadius: "8px",
           border: "1px solid #dadce0",
           backgroundColor: "#fff",
           cursor: "pointer",
-          transition: "background-color 0.2s ease",
+          transition: "all 0.2s ease",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = "#f8f9fa";

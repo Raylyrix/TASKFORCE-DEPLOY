@@ -122,8 +122,9 @@ const Content = ({ forcedTab, hideTabs }: AppProps) => {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "16px",
+        gap: "20px",
         width: "100%",
+        padding: "0 4px",
       }}
     >
       {/* User Menu */}
@@ -132,7 +133,7 @@ const Content = ({ forcedTab, hideTabs }: AppProps) => {
           display: "flex",
           justifyContent: "flex-end",
           alignItems: "center",
-          marginBottom: "-8px",
+          marginBottom: "-4px",
         }}
       >
         <UserMenu

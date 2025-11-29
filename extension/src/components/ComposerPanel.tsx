@@ -116,22 +116,22 @@ const Section = ({
 }) => (
   <section
     style={{
-      border: "1px solid #e0e3e7",
-      borderRadius: "14px",
-      padding: "16px",
+      border: "1px solid #e8eaed",
+      borderRadius: "12px",
+      padding: "20px",
       display: "flex",
       flexDirection: "column",
-      gap: "12px",
+      gap: "16px",
       backgroundColor: "#fff",
     }}
   >
     <header>
-      <h3 style={{ margin: 0, fontSize: "16px" }}>{title}</h3>
+      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "#202124", lineHeight: "1.4" }}>{title}</h3>
       {description ? (
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#5f6368" }}>{description}</p>
+        <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#5f6368", lineHeight: "1.5" }}>{description}</p>
       ) : null}
     </header>
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>{children}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>{children}</div>
   </section>
 );
 
@@ -175,23 +175,24 @@ const StepIndicator = ({
         >
           <span
             style={{
-              width: "26px",
-              height: "26px",
+              width: "28px",
+              height: "28px",
               borderRadius: "999px",
-              backgroundColor: complete || active ? "#1a73e8" : "#e0e3e7",
+              backgroundColor: complete || active ? "#1a73e8" : "#e8eaed",
               color: complete || active ? "#ffffff" : "#5f6368",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 600,
               fontSize: "13px",
+              flexShrink: 0,
             }}
           >
             {complete ? "✓" : index + 1}
           </span>
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: "14px", fontWeight: active ? 600 : 500, color: "#1f1f1f" }}>{step.title}</div>
-            <div style={{ fontSize: "12px", color: "#5f6368" }}>{step.description}</div>
+          <div style={{ textAlign: "left", minWidth: 0 }}>
+            <div style={{ fontSize: "14px", fontWeight: active ? 600 : 500, color: "#202124", lineHeight: "1.4" }}>{step.title}</div>
+            <div style={{ fontSize: "12px", color: "#5f6368", lineHeight: "1.4", marginTop: "2px" }}>{step.description}</div>
           </div>
         </button>
       );

@@ -16,7 +16,10 @@ export const TabSwitcher = ({ tabs, activeId, onChange }: TabSwitcherProps) => (
     style={{
       display: "flex",
       gap: "8px",
-      marginBottom: "16px",
+      marginBottom: "20px",
+      backgroundColor: "#f8f9fa",
+      padding: "4px",
+      borderRadius: "10px",
     }}
   >
     {tabs.map((tab) => {
@@ -28,14 +31,15 @@ export const TabSwitcher = ({ tabs, activeId, onChange }: TabSwitcherProps) => (
           onClick={() => onChange(tab.id)}
           style={{
             flex: 1,
-            padding: "10px 12px",
-            borderRadius: "999px",
+            padding: "10px 16px",
+            borderRadius: "8px",
             border: "none",
-            fontWeight: 600,
+            fontWeight: 500,
             cursor: "pointer",
-            backgroundColor: isActive ? "#0b57d0" : "#f1f3f4",
-            color: isActive ? "#ffffff" : "#1f1f1f",
-            transition: "background-color 0.15s ease",
+            backgroundColor: isActive ? "#ffffff" : "transparent",
+            color: isActive ? "#1a73e8" : "#5f6368",
+            transition: "all 0.2s ease",
+            boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.1)" : "none",
           }}
         >
           {tab.label}

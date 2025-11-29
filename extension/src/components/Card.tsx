@@ -7,10 +7,10 @@ export const Card = ({ children, style, ...rest }: CardProps) => (
     {...rest}
     style={{
       backgroundColor: "#ffffff",
-      borderRadius: "16px",
-      boxShadow: "0 12px 32px rgba(0, 0, 0, 0.12)",
-      padding: "20px",
-      border: "1px solid rgba(0,0,0,0.08)",
+      borderRadius: "12px",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06)",
+      padding: "24px",
+      border: "1px solid #e8eaed",
       ...style,
     }}
   >
