@@ -1116,9 +1116,20 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
             value={campaignName}
             onChange={(event) => updateComposerDraft({ campaignName: event.target.value })}
             style={{
-              padding: "10px 12px",
+              padding: "10px 14px",
               borderRadius: "8px",
               border: "1px solid #dadce0",
+              fontSize: "14px",
+              color: "#202124",
+              backgroundColor: "#fff",
+              transition: "border-color 0.2s ease",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "#1a73e8";
+              e.currentTarget.style.outline = "none";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "#dadce0";
             }}
             placeholder="Fall Outreach Sequence"
           />
@@ -1194,9 +1205,21 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
                   value={emailField}
                   onChange={(event) => updateComposerDraft({ emailField: event.target.value })}
                   style={{
-                    padding: "10px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #dadce0",
+                    fontSize: "14px",
+                    color: "#202124",
+                    backgroundColor: "#fff",
+                    transition: "border-color 0.2s ease",
+                    cursor: "pointer",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#1a73e8";
+                    e.currentTarget.style.outline = "none";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#dadce0";
                   }}
                 >
                   {importResult.headers.map((header) => (
@@ -1286,9 +1309,20 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
               }}
               style={{
                 flex: 1,
-                padding: "10px 12px",
+                padding: "10px 14px",
                 borderRadius: "8px",
                 border: "1px solid #dadce0",
+                fontSize: "14px",
+                color: "#202124",
+                backgroundColor: "#fff",
+                transition: "border-color 0.2s ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#1a73e8";
+                e.currentTarget.style.outline = "none";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#dadce0";
               }}
             />
             <select
