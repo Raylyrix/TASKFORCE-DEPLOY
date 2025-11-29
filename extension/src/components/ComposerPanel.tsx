@@ -265,6 +265,18 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
   const updateFollowUpDraft = useExtensionStore((state) => state.updateFollowUpDraft);
   const backendUrl = useExtensionStore((state) => state.backendUrl);
   const resetComposerDraft = useExtensionStore((state) => state.resetComposerDraft);
+  
+  // Check if this is a fresh instance and reset draft if needed
+  useEffect(() => {
+    const isFreshInstance = typeof window !== "undefined" && 
+      window.sessionStorage.getItem("taskforce-fresh-instance-flag") === "true";
+    if (isFreshInstance) {
+      // Clear the flag
+      window.sessionStorage.removeItem("taskforce-fresh-instance-flag");
+      // Reset to fresh draft
+      resetComposerDraft();
+    }
+  }, [resetComposerDraft]);
 
   const {
     campaignName,

@@ -246,13 +246,19 @@ export const useExtensionStore = create<ExtensionState>((set) => ({
       if (partial.lastSavedAt === undefined) {
         nextDraft.lastSavedAt = state.composerDraft.lastSavedAt;
       }
-      persistComposerDraft(nextDraft);
+      // Only persist if this is not a fresh instance (check sessionStorage)
+      const isFreshInstance = typeof window !== "undefined" && 
+        window.sessionStorage.getItem(FRESH_INSTANCE_KEY) === "true";
+      if (!isFreshInstance) {
+        persistComposerDraft(nextDraft);
+      }
       return { composerDraft: nextDraft };
     }),
   resetComposerDraft: () =>
     set(() => {
       const draft = createDefaultDraft();
-      persistComposerDraft(draft);
+      // Don't persist fresh drafts - they should start empty
+      // Only persist when user makes changes (handled in updateComposerDraft)
       return { composerDraft: draft };
     }),
   openFollowUpOverlay: (sequence) =>
