@@ -646,20 +646,18 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   windowState[instanceId] = startState;
   persistState(windowState);
   
-  // If this is a new composer (spawned via plus button), reset the draft to fresh state
-  if (isNewComposer && config.id === FLOATING_COMPOSER_ID) {
-    // Reset composer draft for new composer instances
-    // Use a small delay to ensure the React component has mounted
-    setTimeout(() => {
-      try {
-        useExtensionStore.getState().resetComposerDraft();
-      } catch (error) {
-        console.warn("[TaskForce] Failed to reset composer draft for new instance", error);
-      }
-    }, 100);
+  // If this is a new composer (spawned via plus button), mark it as fresh
+  // This flag will be checked when the store initializes to prevent loading cached draft
+  const isFresh = isNewComposer && config.id === FLOATING_COMPOSER_ID;
+  if (isFresh) {
+    try {
+      window.sessionStorage.setItem("taskforce-fresh-instance-flag", "true");
+    } catch (error) {
+      console.warn("[TaskForce] Failed to set fresh instance flag", error);
+    }
   }
   
-  createWindowInstance(config, startState);
+  createWindowInstance(config, startState, isFresh);
   setWindowVisibility(instanceId, true);
 };
 

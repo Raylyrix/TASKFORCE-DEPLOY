@@ -1302,11 +1302,16 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
               value={subjectTemplate}
               onChange={handleSubjectChange}
               onKeyDown={handleSubjectKeyDown}
-              onFocus={handleSubjectFocus}
-              onBlur={() => {
+              onFocus={(e) => {
+                handleSubjectFocus();
+                e.currentTarget.style.borderColor = "#1a73e8";
+                e.currentTarget.style.outline = "none";
+              }}
+              onBlur={(e) => {
                 window.setTimeout(() => {
                   closeSubjectAutocomplete();
                 }, 120);
+                e.currentTarget.style.borderColor = "#dadce0";
               }}
               style={{
                 flex: 1,
@@ -1317,13 +1322,6 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
                 color: "#202124",
                 backgroundColor: "#fff",
                 transition: "border-color 0.2s ease",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#1a73e8";
-                e.currentTarget.style.outline = "none";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#dadce0";
               }}
             />
             <select

@@ -95,6 +95,7 @@ type ExtensionState = {
 };
 
 const COMPOSER_STORAGE_KEY = "taskforce-composer-draft";
+const FRESH_INSTANCE_KEY = "taskforce-fresh-instance-flag";
 
 const cloneFollowUpSequence = (sequence: FollowUpSequenceDraft): FollowUpSequenceDraft => ({
   name: sequence.name,
@@ -145,6 +146,17 @@ const loadComposerDraft = (): ComposerDraft => {
   if (typeof window === "undefined") {
     return createDefaultDraft();
   }
+  
+  // Check if this is a fresh instance - if so, don't load from storage
+  const isFreshInstance = window.sessionStorage.getItem(FRESH_INSTANCE_KEY) === "true";
+  if (isFreshInstance) {
+    // Clear the flag so it only applies once
+    window.sessionStorage.removeItem(FRESH_INSTANCE_KEY);
+    const freshDraft = createDefaultDraft();
+    // Don't persist fresh draft to localStorage
+    return freshDraft;
+  }
+  
   try {
     const raw = window.localStorage.getItem(COMPOSER_STORAGE_KEY);
     if (!raw) {
