@@ -607,31 +607,31 @@ export default function NewCampaignPage() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header with Gradient */}
-          <div className="mb-8 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-8 text-white">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-4xl font-bold mb-3 flex items-center gap-3">
-                  <Sparkles className="w-10 h-10" />
+                  <Sparkles className="w-10 h-10 text-gray-900" />
                   Create Email Campaign
                 </h1>
-                <p className="text-lg text-indigo-100">
-                  Design, personalize, and launch your campaign in one beautiful interface
+                <p className="text-lg text-gray-600">
+                  Design, personalize, and launch your campaign from a single, clean interface.
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowBestPractices(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg transition-all border border-white/30 shadow-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg transition-colors hover:bg-black"
                 >
                   <Info className="w-5 h-5" />
                   <span className="font-medium">Best Practices</span>
                 </button>
                 {lastSavedAt && (
-                  <div className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30 text-sm">
-                    Saved {lastSavedAt.toLocaleTimeString()}
+                  <div className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">
+                    Saved at {lastSavedAt.toLocaleTimeString()}
                   </div>
                 )}
               </div>
@@ -643,15 +643,15 @@ export default function NewCampaignPage() {
             {/* Left Column - Main Form (2/3 width) */}
             <div className="xl:col-span-2 space-y-6">
               {/* Audience Section */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Users className="w-6 h-6" />
+                    <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                      <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold">Import Recipients</h2>
-                      <p className="text-blue-100 text-sm">Connect your Google Sheets to import contacts</p>
+                      <h2 className="text-xl font-semibold text-gray-900">Import Recipients</h2>
+                      <p className="text-gray-500 text-sm">Connect your Google Sheets to import contacts.</p>
                     </div>
                   </div>
                 </div>
@@ -684,7 +684,7 @@ export default function NewCampaignPage() {
                       <button
                         onClick={handleImport}
                         disabled={importMutation.isPending}
-                        className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg font-medium transform hover:scale-105"
+                        className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         {importMutation.isPending ? (
                           <>
@@ -708,19 +708,19 @@ export default function NewCampaignPage() {
                   </div>
 
                   {importMutation.isPending && (
-                    <div className="text-center py-12">
-                      <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
+                    <div className="text-center py-10">
+                      <RefreshCw className="w-10 h-10 text-gray-400 animate-spin mx-auto mb-3" />
                       <p className="text-sm text-gray-600">Importing sheet data...</p>
                     </div>
                   )}
 
                   {importResult && (
                     <div className="space-y-4">
-                      <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
-                        <div className="flex items-center gap-2 text-green-800">
-                          <CheckCircle className="w-5 h-5" />
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                        <div className="flex items-center gap-2 text-gray-800">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
                           <span className="font-medium">
-                            Successfully imported {importResult.rowCount || 0} rows
+                            Imported {importResult.rowCount || 0} rows from your sheet
                           </span>
                         </div>
                       </div>
@@ -744,16 +744,16 @@ export default function NewCampaignPage() {
                       </div>
 
                       {emailField && (
-                        <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl">
-                          <p className="text-sm text-indigo-800 font-medium">
-                            <strong>{importResult.rowCount || 0}</strong> recipients ready to receive your campaign
+                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                          <p className="text-sm text-gray-800 font-medium">
+                            <strong>{importResult.rowCount || 0}</strong> recipients ready
                           </p>
                         </div>
                       )}
 
                       {/* Preview first few rows */}
                       {importResult.rows && importResult.rows.length > 0 && (
-                        <div className="mt-4 overflow-x-auto border-2 border-gray-200 rounded-xl">
+                        <div className="mt-4 overflow-x-auto border border-gray-200 rounded-xl">
                           <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                               <tr>
@@ -789,15 +789,15 @@ export default function NewCampaignPage() {
               </div>
 
               {/* Email Content Section */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-600 p-6 text-white">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <FileText className="w-6 h-6" />
+                    <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                      <FileText className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold">Email Content</h2>
-                      <p className="text-purple-100 text-sm">Craft your personalized email message</p>
+                      <h2 className="text-xl font-semibold text-gray-900">Email Content</h2>
+                      <p className="text-gray-500 text-sm">Craft your personalized email message.</p>
                     </div>
                   </div>
                 </div>
@@ -823,10 +823,10 @@ export default function NewCampaignPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setAutocompleteEnabled(!autocompleteEnabled)}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                          className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
                             autocompleteEnabled
-                              ? "bg-green-100 text-green-700 border border-green-300"
-                              : "bg-gray-100 text-gray-600 border border-gray-300"
+                              ? "bg-gray-900 text-white border-gray-900"
+                              : "bg-white text-gray-700 border-gray-300"
                           }`}
                         >
                           {autocompleteEnabled ? "Autocomplete ON" : "Autocomplete OFF"}
@@ -916,8 +916,8 @@ export default function NewCampaignPage() {
                     </div>
 
                     {showMergeFields && mergeFields.length > 0 && (
-                      <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
-                        <div className="text-xs font-medium text-blue-900 mb-3">Available Merge Fields:</div>
+                      <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                        <div className="text-xs font-medium text-gray-800 mb-3">Available Merge Fields</div>
                         <div className="flex flex-wrap gap-2">
                           {mergeFields.map((col: string, idx: number) => (
                             <button
@@ -928,7 +928,7 @@ export default function NewCampaignPage() {
                                 setBodyTemplate((prev) => prev + field);
                                 richTextEditorRef.current?.focus();
                               }}
-                              className="px-3 py-1.5 text-xs bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-all font-medium shadow-sm hover:shadow-md transform hover:scale-105"
+                              className="px-3 py-1.5 text-xs bg-white border border-gray-300 text-gray-800 rounded-lg hover:bg-gray-100 transition-colors font-medium"
                             >
                               {col}
                             </button>
@@ -956,15 +956,15 @@ export default function NewCampaignPage() {
               </div>
 
               {/* Schedule & Settings Section */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Calendar className="w-6 h-6" />
+                    <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                      <Calendar className="w-5 h-5" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold">Schedule & Settings</h2>
-                      <p className="text-emerald-100 text-sm">Configure when and how to send your campaign</p>
+                      <h2 className="text-xl font-semibold text-gray-900">Schedule & Settings</h2>
+                      <p className="text-gray-500 text-sm">Configure when and how to send your campaign.</p>
                     </div>
                   </div>
                 </div>
@@ -999,9 +999,9 @@ export default function NewCampaignPage() {
                     </div>
                   </div>
 
-                  <div className="p-6 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl border-2 border-gray-200 space-y-4">
+                  <div className="p-6 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-indigo-600" />
+                      <Zap className="w-5 h-5 text-gray-900" />
                       Tracking Options
                     </h3>
                     <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white transition-all">
@@ -1033,21 +1033,21 @@ export default function NewCampaignPage() {
               </div>
 
               {/* Follow-up Sequence Section */}
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-orange-500 to-red-600 p-6 text-white">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                        <RefreshCw className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5" />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-bold">Follow-up Sequence</h2>
-                        <p className="text-orange-100 text-sm">Automate follow-ups for non-responders</p>
+                        <h2 className="text-xl font-semibold text-gray-900">Follow-up Sequence</h2>
+                        <p className="text-gray-500 text-sm">Automate follow-ups for non-responders.</p>
                       </div>
                     </div>
                     <button
                       onClick={() => setShowFollowUps(!showFollowUps)}
-                      className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg transition-all border border-white/30"
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       {showFollowUps ? "Hide" : "Show"}
                     </button>
@@ -1061,9 +1061,9 @@ export default function NewCampaignPage() {
                         : "No follow-ups configured yet. Click below to add follow-up sequences."}
                     </div>
                     {followUpSequence && followUpSequence.steps.length > 0 && (
-                      <div className="mb-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-xl">
-                        <div className="font-semibold text-orange-900 mb-2">{followUpSequence.name}</div>
-                        <ul className="text-sm text-orange-800 list-disc list-inside space-y-1">
+                      <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                        <div className="font-semibold text-gray-900 mb-2">{followUpSequence.name}</div>
+                        <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
                           {followUpSequence.steps.map((step, idx) => {
                             const delay = step.delayMs ? Math.round(step.delayMs / (60 * 60 * 1000)) : 48;
                             const timing = step.useDateTime && step.scheduledAt
@@ -1082,7 +1082,7 @@ export default function NewCampaignPage() {
                     )}
                     <button
                       onClick={() => setShowFollowUpBuilder(true)}
-                      className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl hover:from-orange-600 hover:to-red-700 transition-all font-medium flex items-center justify-center gap-2 shadow-lg"
+                      className="w-full px-4 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-colors font-medium flex items-center justify-center gap-2"
                     >
                       <Plus className="w-5 h-5" />
                       {followUpSequence && followUpSequence.steps.length > 0 ? "Edit Follow-ups" : "Add Follow-ups"}
@@ -1092,9 +1092,9 @@ export default function NewCampaignPage() {
               </div>
 
               {/* Launch Button */}
-              <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 {errors.launch && (
-                  <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                  <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
                     <div className="flex items-center gap-2 text-red-800">
                       <AlertCircle className="w-5 h-5" />
                       <span className="font-medium">{errors.launch}</span>
@@ -1102,10 +1102,10 @@ export default function NewCampaignPage() {
                   </div>
                 )}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 text-white">
+                  <div className="flex items-center gap-4 text-gray-700">
                     <button
                       onClick={handleSaveDraft}
-                      className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg transition-all border border-white/30 flex items-center gap-2"
+                      className="px-4 py-2 border border-gray-300 rounded-lg transition-colors hover:bg-gray-50 flex items-center gap-2 text-sm"
                     >
                       <Save className="w-4 h-4" />
                       Save Draft
@@ -1117,7 +1117,7 @@ export default function NewCampaignPage() {
                   <button
                     onClick={handleLaunch}
                     disabled={!isFormValid || createMutation.isPending}
-                    className="px-8 py-4 bg-white text-indigo-600 rounded-xl hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 font-bold text-lg shadow-2xl transform hover:scale-105 disabled:transform-none"
+                    className="px-8 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-sm"
                   >
                     {createMutation.isPending ? (
                       <>

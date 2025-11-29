@@ -2,7 +2,21 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Link as LinkIcon, Type, Palette } from "lucide-react";
+import {
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  List,
+  ListOrdered,
+  Link as LinkIcon,
+  Type,
+  Palette,
+  Image as ImageIcon,
+} from "lucide-react";
 import { MergeFieldAutocomplete } from "./MergeFieldAutocomplete";
 
 const FONT_FAMILIES = [
@@ -326,6 +340,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
       applyCommand("createLink", url);
     };
 
+    const insertImage = () => {
+      const url = window.prompt("Enter image URL");
+      if (!url) return;
+      applyCommand("insertImage", url);
+    };
+
     const handleMergeFieldSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
       const token = event.target.value;
       if (!token) return;
@@ -443,6 +463,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             <ToolbarButton icon={<List className="w-4 h-4" />} onClick={() => applyCommand("insertUnorderedList")} title="Bulleted list" />
             <ToolbarButton icon={<ListOrdered className="w-4 h-4" />} onClick={() => applyCommand("insertOrderedList")} title="Numbered list" />
             <ToolbarButton icon={<LinkIcon className="w-4 h-4" />} onClick={toggleLink} title="Insert link" />
+            <ToolbarButton icon={<ImageIcon className="w-4 h-4" />} onClick={insertImage} title="Insert image (URL)" />
             <div className="w-px h-6 bg-gray-300 mx-1" />
             <ToolbarButton icon={<Type className="w-4 h-4" />} onClick={() => applyCommand("removeFormat")} title="Clear formatting" />
           </div>
