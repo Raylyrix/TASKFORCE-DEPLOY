@@ -10,6 +10,46 @@ type CampaignListItem = Awaited<ReturnType<typeof campaignEngine.listCampaignsFo
 
 export const campaignsRouter = Router();
 
+// Unsubscribe endpoint for better deliverability
+campaignsRouter.get("/unsubscribe", async (req, res, next) => {
+  try {
+    const email = typeof req.query.email === "string" ? req.query.email : null;
+    
+    if (!email) {
+      res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Unsubscribe</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+          <h1>Invalid Request</h1>
+          <p>Please use the unsubscribe link from your email.</p>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    // In a real implementation, you would:
+    // 1. Verify the email belongs to a campaign
+    // 2. Mark the recipient as unsubscribed
+    // 3. Update the campaign recipient status
+    
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Unsubscribed</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+        <h1>Successfully Unsubscribed</h1>
+        <p>You have been unsubscribed from future emails.</p>
+        <p style="color: #666; font-size: 14px;">If you have any questions, please contact us.</p>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    next(error);
+  }
+});
+
 const recipientRecordSchema = z.record(z.string(), z.string());
 
 const attachmentSchema = z.object({

@@ -38,6 +38,7 @@ import type {
 } from "../queue/types";
 import { gmailDeliveryService } from "./gmailDelivery";
 import { googleAuthService } from "./googleAuth";
+import { antiSpamService } from "./antiSpamService";
 
 type RecipientRecord = Record<string, string>;
 
@@ -129,28 +130,9 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
 };
 
 // Validate and clean subject line to avoid spam triggers
+// Now uses the comprehensive antiSpamService
 const cleanSubjectLine = (subject: string): string => {
-  let cleaned = subject.trim();
-  
-  // Remove excessive punctuation
-  cleaned = cleaned.replace(/[!?]{2,}/g, (match) => match[0]); // Keep only one ! or ?
-  
-  // Remove excessive special characters
-  cleaned = cleaned.replace(/[$%#@]{2,}/g, ""); // Remove multiple special chars
-  
-  // Ensure not all caps (spam trigger)
-  const allCaps = cleaned === cleaned.toUpperCase() && cleaned.length > 5;
-  if (allCaps) {
-    // Convert to title case
-    cleaned = cleaned.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
-  }
-  
-  // Limit length (Gmail truncates at ~70 chars)
-  if (cleaned.length > 70) {
-    cleaned = cleaned.substring(0, 67) + "...";
-  }
-  
-  return cleaned;
+  return antiSpamService.cleanSubjectLine(subject);
 };
 
 const ensureUserHasCredentials = async (userId: string) => {
@@ -596,8 +578,30 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     throw new Error("Email subject is invalid. Please check your campaign template.");
   }
 
+  // Perform spam check before sending
+  const spamCheck = antiSpamService.checkForSpam({
+    subject: cleanSubject,
+    html: messageContent.html,
+    text: htmlToText(messageContent.html),
+    from: recipient.campaign.userId, // Will be resolved to email in gmailDelivery
+    to: recipient.email,
+  });
+
+  if (spamCheck.isSpam) {
+    logger.warn(
+      {
+        campaignId: recipient.campaign.id,
+        recipientId: recipient.id,
+        spamScore: spamCheck.score,
+        reasons: spamCheck.reasons,
+        subject: cleanSubject.substring(0, 50),
+      },
+      "Campaign email flagged as potential spam - sending anyway but should be reviewed",
+    );
+  }
+
   logger.info(
-    { campaignId: recipient.campaign.id, recipientId: recipient.id, subject: cleanSubject },
+    { campaignId: recipient.campaign.id, recipientId: recipient.id, subject: cleanSubject, spamScore: spamCheck.score },
     "Sending campaign email",
   );
 

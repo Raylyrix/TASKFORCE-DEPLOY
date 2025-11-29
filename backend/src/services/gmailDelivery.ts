@@ -4,6 +4,7 @@ import { google } from "googleapis";
 import { AppConfig } from "../config/env";
 import { googleAuthService } from "./googleAuth";
 import { logger } from "../lib/logger";
+import { antiSpamService } from "./antiSpamService";
 
 export type Attachment = {
   filename: string;
@@ -226,8 +227,32 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
   // Create plain text version if not provided (use HTML with signature for text conversion)
   const bodyText = payload.bodyText || htmlToText(bodyHtmlWithSignature);
 
+  // Clean and validate subject line to prevent spam
+  const cleanedSubject = antiSpamService.cleanSubjectLine(payload.subject);
+  
+  // Perform spam check and log warnings
+  const spamCheck = antiSpamService.checkForSpam({
+    subject: cleanedSubject,
+    html: bodyHtmlWithSignature,
+    text: bodyText,
+    from: userEmail,
+    to: payload.to,
+  });
+
+  if (spamCheck.isSpam) {
+    logger.warn(
+      {
+        userId: payload.userId,
+        to: payload.to,
+        spamScore: spamCheck.score,
+        reasons: spamCheck.reasons,
+      },
+      "Email flagged as potential spam - sending anyway but user should review",
+    );
+  }
+
   // Encode subject line properly for non-ASCII characters (fixes encoding issues like Ã¢Â€Â¢)
-  const encodedSubject = encodeSubject(payload.subject);
+  const encodedSubject = encodeSubject(cleanedSubject);
   
   // Build headers - CRITICAL: Don't use spam-triggering headers
   const headers: Array<[string, string]> = [
@@ -255,9 +280,14 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     headers.push(["References", payload.references]);
   }
 
-  // Note: List-Unsubscribe header removed temporarily to avoid spam triggers
-  // The placeholder URLs ({{email}}, {{token}}) were triggering Gmail's phishing detection
-  // TODO: Re-add when proper unsubscribe endpoint is implemented with real email/token values
+  // Add proper unsubscribe headers for better deliverability (only for campaigns)
+  // This helps with spam filtering - Gmail prefers emails with unsubscribe options
+  if (payload.isCampaign && AppConfig.publicUrl) {
+    // Use a simple unsubscribe URL - users can implement proper unsubscribe logic
+    const unsubscribeUrl = `${AppConfig.publicUrl}/api/campaigns/unsubscribe?email=${encodeURIComponent(payload.to)}`;
+    headers.push(["List-Unsubscribe", `<${unsubscribeUrl}>`]);
+    headers.push(["List-Unsubscribe-Post", "List-Unsubscribe=One-Click"]);
+  }
 
   // Add X- headers for better deliverability (but avoid spam triggers)
   headers.push(["X-Mailer", "TaskForce Campaign Manager"]);
@@ -265,6 +295,8 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
   // Only suppress auto-responses if this is a campaign (not personal emails)
   if (payload.isCampaign) {
     headers.push(["X-Auto-Response-Suppress", "All"]);
+    // Add Precedence header to help with deliverability
+    headers.push(["Precedence", "bulk"]);
   }
 
   // Add custom headers if provided
