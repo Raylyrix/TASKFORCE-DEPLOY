@@ -234,7 +234,7 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
     // Import required services
     const { gmailDeliveryService } = await import("../../services/gmailDelivery.js");
     const { googleAuthService } = await import("../../services/googleAuth.js");
-    const { htmlToText } = await import("html-to-text");
+    const htmlToText = (await import("html-to-text")).htmlToText;
 
     let threadId: string | null = null;
     let inReplyTo: string | null = null;
@@ -315,12 +315,9 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
     if (payload.isNested && payload.parentFollowUpId) {
       const parentMessage = await prisma.messageLog.findUnique({
         where: { id: payload.parentFollowUpId },
-        include: {
-          campaignRecipient: true,
-        },
       });
 
-      if (parentMessage && parentMessage.campaignRecipient) {
+      if (parentMessage && parentMessage.campaignRecipientId) {
         await prisma.messageLog.create({
           data: {
             campaignId: parentMessage.campaignId,
