@@ -624,6 +624,10 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     },
   });
 
+  if (!step) {
+    throw new Error("Follow-up step not found");
+  }
+
   // Read offsetConfig to check if this is a nested follow-up
   const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
   const isNested = offsetConfig?.isNested ?? false;
@@ -780,7 +784,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       logger.error(
         { 
           error, 
-          messageId: originalMessage.gmailMessageId,
+          messageId: messageToReplyTo?.gmailMessageId,
           recipientId: recipient.id,
           followUpStepId: step.id,
           errorMessage: error instanceof Error ? error.message : String(error)
@@ -795,7 +799,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     }
   }
 
-  if (originalMessage) {
+  if (messageToReplyTo) {
     // Check if we should stop based on reply
     // For nested follow-ups, check replies to the parent follow-up
     // For regular follow-ups, check replies to the original message

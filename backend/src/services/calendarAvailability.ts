@@ -180,9 +180,9 @@ export const calendarAvailabilityService = {
 
     const normalizedBusyBlocks = normalizeBusyBlocks(busyBlocks, rangeStart, rangeEnd);
 
-    // Get custom availability slots if meetingTypeId is provided
-    let customSlots: AvailabilitySlot[] = [];
-    if (options.meetingTypeId) {
+    // Merge custom slots with busy blocks (custom slots were already fetched earlier if no calendar connection)
+    // If we have calendar connection, we still want to include custom slots
+    if (options.meetingTypeId && customSlots.length === 0) {
       const slots = await prisma.customAvailabilitySlot.findMany({
         where: {
           meetingTypeId: options.meetingTypeId,

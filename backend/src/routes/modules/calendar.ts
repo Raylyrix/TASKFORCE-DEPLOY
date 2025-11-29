@@ -863,22 +863,6 @@ calendarRouter.delete("/events/:eventId", requireUser, async (req, res, next) =>
   }
 });
 
-// Custom Availability Slot Management
-const customSlotSchema = z.object({
-  startTime: z.string().datetime(),
-  endTime: z.string().datetime(),
-  isRecurring: z.boolean().default(false),
-  recurrenceRule: z.string().optional(),
-  timeZone: z.string(),
-  isActive: z.boolean().default(true),
-  notes: z.string().max(500).optional(),
-});
-
-const customSlotUpdateSchema = customSlotSchema.partial().refine(
-  (data) => Object.keys(data).length > 0,
-  { message: "Update payload cannot be empty" }
-);
-
 // Get all custom slots for a meeting type
 calendarRouter.get("/meeting-types/:meetingTypeId/slots", requireUser, async (req, res, next) => {
   try {
