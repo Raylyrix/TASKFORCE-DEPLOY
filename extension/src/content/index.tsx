@@ -796,8 +796,8 @@ const createWindowInstance = (config: WindowConfig, state: StoredWindowState, is
   Object.assign(content.style, {
     flex: "1",
     overflow: "auto",
-    padding: "16px",
-    backgroundColor: "#f6f8fb",
+    padding: "20px",
+    backgroundColor: "#ffffff",
     pointerEvents: "auto", // Ensure content can receive pointer events
     scrollBehavior: "smooth", // Smooth scrolling
     userSelect: "text", // Allow text selection in content (buttons need this)
