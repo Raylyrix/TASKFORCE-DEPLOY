@@ -626,7 +626,7 @@ export default function NewCampaignPage() {
                   onClick={() => setShowBestPractices(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg transition-colors hover:bg-black"
                 >
-                  <Info className="w-5 h-5" />
+                  <Info className="w-5 h-5 text-white" />
                   <span className="font-medium">Best Practices</span>
                 </button>
                 {lastSavedAt && (
@@ -647,7 +647,7 @@ export default function NewCampaignPage() {
                 <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
-                      <Users className="w-5 h-5" />
+                      <Users className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold text-gray-900">Import Recipients</h2>
@@ -688,12 +688,12 @@ export default function NewCampaignPage() {
                       >
                         {importMutation.isPending ? (
                           <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <RefreshCw className="w-4 h-4 animate-spin text-white" />
                             Importing...
                           </>
                         ) : (
                           <>
-                            <Upload className="w-4 h-4" />
+                            <Upload className="w-4 h-4 text-white" />
                             Import
                           </>
                         )}
@@ -701,7 +701,7 @@ export default function NewCampaignPage() {
                     </div>
                     {errors.sheet && (
                       <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
+                        <AlertCircle className="w-4 h-4 text-red-600" />
                         {errors.sheet}
                       </p>
                     )}
@@ -793,7 +793,7 @@ export default function NewCampaignPage() {
                 <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
-                      <FileText className="w-5 h-5" />
+                      <FileText className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold text-gray-900">Email Content</h2>
@@ -811,7 +811,7 @@ export default function NewCampaignPage() {
                       value={campaignName}
                       onChange={(e) => setCampaignName(e.target.value)}
                       placeholder="My Amazing Campaign"
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300 bg-white text-gray-900"
                     />
                   </div>
 
@@ -882,13 +882,13 @@ export default function NewCampaignPage() {
                     </div>
                     {errors.subject && (
                       <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
+                        <AlertCircle className="w-4 h-4 text-red-600" />
                         {errors.subject}
                       </p>
                     )}
                     {missingTokens.length > 0 && (
                       <p className="mt-1 text-sm text-orange-600 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
+                        <AlertCircle className="w-4 h-4 text-orange-600" />
                         Missing merge fields: {missingTokens.join(", ")}
                       </p>
                     )}
@@ -947,7 +947,7 @@ export default function NewCampaignPage() {
                     />
                     {errors.body && (
                       <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
+                        <AlertCircle className="w-4 h-4 text-red-600" />
                         {errors.body}
                       </p>
                     )}
@@ -960,7 +960,7 @@ export default function NewCampaignPage() {
                 <div className="border-b border-gray-100 p-6 bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
-                      <Calendar className="w-5 h-5" />
+                      <Calendar className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold text-gray-900">Schedule & Settings</h2>
@@ -978,7 +978,7 @@ export default function NewCampaignPage() {
                         type="datetime-local"
                         value={startAt}
                         onChange={(e) => setStartAt(e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300 bg-white text-gray-900"
                       />
                     </div>
 
@@ -991,7 +991,7 @@ export default function NewCampaignPage() {
                         min="5"
                         value={delaySeconds}
                         onChange={(e) => setDelaySeconds(Math.max(5, Number(e.target.value)))}
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300 bg-white text-gray-900"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Minimum 5 seconds to avoid rate limiting
@@ -1038,7 +1038,7 @@ export default function NewCampaignPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-gray-900 text-white flex items-center justify-center">
-                        <RefreshCw className="w-5 h-5" />
+                        <RefreshCw className="w-5 h-5 text-white" />
                       </div>
                       <div>
                         <h2 className="text-xl font-semibold text-gray-900">Follow-up Sequence</h2>
@@ -1084,7 +1084,7 @@ export default function NewCampaignPage() {
                       onClick={() => setShowFollowUpBuilder(true)}
                       className="w-full px-4 py-3 bg-gray-900 text-white rounded-xl hover:bg-black transition-colors font-medium flex items-center justify-center gap-2"
                     >
-                      <Plus className="w-5 h-5" />
+                      <Plus className="w-5 h-5 text-white" />
                       {followUpSequence && followUpSequence.steps.length > 0 ? "Edit Follow-ups" : "Add Follow-ups"}
                     </button>
                   </div>
@@ -1096,7 +1096,7 @@ export default function NewCampaignPage() {
                 {errors.launch && (
                   <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
                     <div className="flex items-center gap-2 text-red-800">
-                      <AlertCircle className="w-5 h-5" />
+                      <AlertCircle className="w-5 h-5 text-red-800" />
                       <span className="font-medium">{errors.launch}</span>
                     </div>
                   </div>
@@ -1107,11 +1107,11 @@ export default function NewCampaignPage() {
                       onClick={handleSaveDraft}
                       className="px-4 py-2 border border-gray-300 rounded-lg transition-colors hover:bg-gray-50 flex items-center gap-2 text-sm"
                     >
-                      <Save className="w-4 h-4" />
+                      <Save className="w-4 h-4 text-gray-700" />
                       Save Draft
                     </button>
                     {saveMessage && (
-                      <span className="text-sm text-green-200">{saveMessage}</span>
+                      <span className="text-sm text-green-600">{saveMessage}</span>
                     )}
                   </div>
                   <button
@@ -1121,12 +1121,12 @@ export default function NewCampaignPage() {
                   >
                     {createMutation.isPending ? (
                       <>
-                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <RefreshCw className="w-5 h-5 animate-spin text-white" />
                         Launching...
                       </>
                     ) : (
                       <>
-                        <Send className="w-6 h-6" />
+                        <Send className="w-6 h-6 text-white" />
                         Launch Campaign
                       </>
                     )}
@@ -1163,7 +1163,7 @@ export default function NewCampaignPage() {
                           onClick={() => setIsSearchOpen(!isSearchOpen)}
                           className="text-xs text-blue-700 hover:text-blue-900 flex items-center gap-1"
                         >
-                          <Search className="w-3 h-3" />
+                          <Search className="w-3 h-3 text-gray-700" />
                           Search
                         </button>
                       </div>
