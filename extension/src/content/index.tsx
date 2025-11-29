@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 
 import { ComposerApp, FollowUpApp, BestPracticesApp } from "./App";
+import { useExtensionStore } from "../shared/store";
 
 const FLOATING_COMPOSER_ID = "taskforce-floating-composer";
 const FLOATING_FOLLOWUPS_ID = "taskforce-floating-followups";
@@ -651,7 +652,6 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
     // Use a small delay to ensure the React component has mounted
     setTimeout(() => {
       try {
-        const { useExtensionStore } = require("../shared/store");
         useExtensionStore.getState().resetComposerDraft();
       } catch (error) {
         console.warn("[TaskForce] Failed to reset composer draft for new instance", error);
