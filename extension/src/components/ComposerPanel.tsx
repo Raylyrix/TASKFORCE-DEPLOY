@@ -14,6 +14,7 @@ import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { CampaignLaunchProgress } from "./CampaignLaunchProgress";
 import { useSchedulerBootstrap } from "../hooks/useSchedulerBootstrap";
 import { MeetingTypePicker } from "./MeetingTypePicker";
+import { Paperclip, X } from "lucide-react";
 
 type ComposerPanelProps = {
   onCampaignCreated: () => Promise<unknown>;
@@ -300,6 +301,7 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
     trackClicks,
     followUpSequence,
     lastSavedAt,
+    attachments,
   } = composerDraft;
 
   const savedAtDate = lastSavedAt ? new Date(lastSavedAt) : null;
@@ -415,6 +417,12 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
               template: {
                 subject: subjectTemplate,
                 html: bodyTemplate,
+                attachments: attachments.map((att) => ({
+                  filename: att.filename,
+                  content: att.content,
+                  contentType: att.contentType,
+                  size: att.size,
+                })),
               },
             },
           }),

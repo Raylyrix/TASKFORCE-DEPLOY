@@ -13,6 +13,13 @@ import type {
 
 type SelectedTab = "composer" | "followUps" | "campaigns";
 
+type Attachment = {
+  filename: string;
+  content: string; // Base64-encoded file content
+  contentType?: string;
+  size?: number;
+};
+
 type ComposerDraft = {
   campaignName: string;
   sheetUrl: string;
@@ -28,6 +35,7 @@ type ComposerDraft = {
   followUpSequence: FollowUpSequenceDraft | null;
   lastSavedAt?: string;
   autocompleteEnabled: boolean;
+  attachments: Attachment[];
 };
 
 type FollowUpOverlayState = {
@@ -140,6 +148,7 @@ const createDefaultDraft = (): ComposerDraft => ({
   followUpSequence: null,
   lastSavedAt: undefined,
   autocompleteEnabled: true,
+  attachments: [],
 });
 
 const loadComposerDraft = (): ComposerDraft => {

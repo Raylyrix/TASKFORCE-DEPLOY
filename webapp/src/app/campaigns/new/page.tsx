@@ -48,6 +48,7 @@ import {
   Square,
   RefreshCw,
   Zap,
+  Paperclip,
 } from "lucide-react";
 import { EmailBestPracticesModal } from "@/components/EmailBestPracticesModal";
 import { CampaignLaunchProgress } from "@/components/CampaignLaunchProgress";
@@ -74,6 +75,13 @@ type FollowUpSequence = {
   steps: FollowUpStep[];
 };
 
+type Attachment = {
+  filename: string;
+  content: string; // Base64-encoded file content
+  contentType?: string;
+  size?: number;
+};
+
 export default function NewCampaignPage() {
   const router = useRouter();
   
@@ -89,6 +97,7 @@ export default function NewCampaignPage() {
   const [delaySeconds, setDelaySeconds] = useState(5);
   const [trackOpens, setTrackOpens] = useState(true);
   const [trackClicks, setTrackClicks] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   
   // UI state
   const [showPreview, setShowPreview] = useState(true);
@@ -313,6 +322,12 @@ export default function NewCampaignPage() {
           template: {
             subject: subjectTemplate.trim(),
             html: bodyTemplate.trim(),
+            attachments: attachments.map((att) => ({
+              filename: att.filename,
+              content: att.content,
+              contentType: att.contentType,
+              size: att.size,
+            })),
           },
         },
       };
@@ -951,6 +966,109 @@ export default function NewCampaignPage() {
                         {errors.body}
                       </p>
                     )}
+
+                    {/* File Attachments */}
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Attachments
+                      </label>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Add files to your email (max 25MB per file, 25MB total). Files are automatically scanned for viruses.
+                      </p>
+                      <input
+                        type="file"
+                        id="attachment-input"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+                          const newAttachments: Attachment[] = [];
+
+                          for (const file of files) {
+                            if (file.size > MAX_SIZE) {
+                              alert(`File "${file.name}" exceeds the 25MB limit. Please choose a smaller file.`);
+                              continue;
+                            }
+
+                            try {
+                              const base64 = await new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const result = reader.result as string;
+                                  // Remove data URL prefix
+                                  const base64Content = result.split(",")[1] || result;
+                                  resolve(base64Content);
+                                };
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                              });
+
+                              newAttachments.push({
+                                filename: file.name,
+                                content: base64,
+                                contentType: file.type || undefined,
+                                size: file.size,
+                              });
+                            } catch (error) {
+                              console.error("Failed to read file:", error);
+                              alert(`Failed to read file "${file.name}". Please try again.`);
+                            }
+                          }
+
+                          // Check total size
+                          const totalSize = [...attachments, ...newAttachments].reduce((sum, att) => sum + (att.size || 0), 0);
+                          if (totalSize > MAX_SIZE) {
+                            alert(`Total attachment size exceeds 25MB. Please remove some files.`);
+                            return;
+                          }
+
+                          setAttachments([...attachments, ...newAttachments]);
+                          // Reset input
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById("attachment-input") as HTMLInputElement;
+                          input?.click();
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                        Add Files
+                      </button>
+                      {attachments.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {attachments.map((att, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg"
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                <span className="text-sm text-gray-900 truncate">{att.filename}</span>
+                                <span className="text-xs text-gray-500 flex-shrink-0">
+                                  ({(att.size || 0) / 1024 / 1024 < 1
+                                    ? `${((att.size || 0) / 1024).toFixed(1)} KB`
+                                    : `${((att.size || 0) / 1024 / 1024).toFixed(2)} MB`})
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAttachments(attachments.filter((_, i) => i !== index));
+                                }}
+                                className="ml-2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
