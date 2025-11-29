@@ -17,6 +17,7 @@ import { MeetingTypePicker } from "./MeetingTypePicker";
 
 type ComposerPanelProps = {
   onCampaignCreated: () => Promise<unknown>;
+  instanceId?: string;
 };
 
 const initialStartAt = () => formatISO(addMinutes(new Date(), 5));

@@ -23,9 +23,9 @@ type AppProps = {
   instanceId?: string;
 };
 
-export const App = ({ forcedTab, hideTabs, isFreshInstance }: AppProps) => (
+export const App = ({ forcedTab, hideTabs, instanceId }: AppProps) => (
   <QueryClientProvider client={queryClient}>
-    <Content forcedTab={forcedTab} hideTabs={hideTabs} isFreshInstance={isFreshInstance} />
+    <Content forcedTab={forcedTab} hideTabs={hideTabs} instanceId={instanceId} />
   </QueryClientProvider>
 );
 
@@ -160,7 +160,7 @@ const Content = ({ forcedTab, hideTabs, instanceId }: AppProps) => {
         />
       ) : null}
 
-      {activeTab === "composer" && <ComposerPanel onCampaignCreated={refetchCampaigns} />}
+      {activeTab === "composer" && <ComposerPanel onCampaignCreated={refetchCampaigns} instanceId={instanceId} />}
       {activeTab === "followUps" && <FollowUpPanel />}
       {activeTab === "campaigns" && <CampaignsPanel />}
     </div>
