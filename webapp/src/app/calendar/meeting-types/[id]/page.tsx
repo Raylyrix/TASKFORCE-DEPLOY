@@ -8,6 +8,17 @@ import { api } from "@/lib/api";
 import { Calendar, Clock, MapPin, Video, Phone, Link as LinkIcon, Save, X, Plus, Edit2, Trash2, Copy, Check, XCircle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
+type AvailabilitySlot = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  isRecurring: boolean;
+  recurrenceRule?: string;
+  timeZone: string;
+  isActive: boolean;
+  notes?: string;
+};
+
 export default function MeetingTypeDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -80,7 +91,7 @@ export default function MeetingTypeDetailPage() {
     },
   });
 
-  const handleEditSlot = (slot: typeof slotsData.slots[0]) => {
+  const handleEditSlot = (slot: AvailabilitySlot) => {
     setEditingSlot(slot.id);
     setSlotForm({
       startTime: slot.startTime,
