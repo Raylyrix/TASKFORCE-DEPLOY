@@ -256,7 +256,7 @@ const findMergeFields = (template: string) => {
   return Array.from(tokens);
 };
 
-export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
+export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelProps) => {
   useSchedulerBootstrap();
   const composerDraft = useExtensionStore((state) => state.composerDraft);
   const updateComposerDraft = useExtensionStore((state) => state.updateComposerDraft);
@@ -267,16 +267,23 @@ export const ComposerPanel = ({ onCampaignCreated }: ComposerPanelProps) => {
   const resetComposerDraft = useExtensionStore((state) => state.resetComposerDraft);
   
   // Check if this is a fresh instance and reset draft if needed
+  // Fresh instances are those with instanceId stored in sessionStorage
+  const hasCheckedFreshInstance = useRef(false);
   useEffect(() => {
-    const isFreshInstance = typeof window !== "undefined" && 
-      window.sessionStorage.getItem("taskforce-fresh-instance-flag") === "true";
-    if (isFreshInstance) {
+    if (hasCheckedFreshInstance.current || !instanceId) return;
+    hasCheckedFreshInstance.current = true;
+    
+    const freshInstanceId = typeof window !== "undefined" && 
+      window.sessionStorage.getItem("taskforce-fresh-instance-id");
+    
+    // If this instanceId matches the fresh instance, reset the draft
+    if (freshInstanceId === instanceId) {
       // Clear the flag
-      window.sessionStorage.removeItem("taskforce-fresh-instance-flag");
+      window.sessionStorage.removeItem("taskforce-fresh-instance-id");
       // Reset to fresh draft
       resetComposerDraft();
     }
-  }, [resetComposerDraft]);
+  }, [instanceId, resetComposerDraft]);
 
   const {
     campaignName,

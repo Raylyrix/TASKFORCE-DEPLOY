@@ -20,7 +20,7 @@ type SelectedTab = "composer" | "followUps" | "campaigns";
 type AppProps = {
   forcedTab?: SelectedTab;
   hideTabs?: boolean;
-  isFreshInstance?: boolean;
+  instanceId?: string;
 };
 
 export const App = ({ forcedTab, hideTabs, isFreshInstance }: AppProps) => (
@@ -29,8 +29,8 @@ export const App = ({ forcedTab, hideTabs, isFreshInstance }: AppProps) => (
   </QueryClientProvider>
 );
 
-export const ComposerApp = ({ isFreshInstance }: { isFreshInstance?: boolean } = {}) => (
-  <App forcedTab="composer" hideTabs isFreshInstance={isFreshInstance} />
+export const ComposerApp = ({ instanceId }: { instanceId?: string } = {}) => (
+  <App forcedTab="composer" hideTabs instanceId={instanceId} />
 );
 
 export const FollowUpApp = () => <App forcedTab="followUps" hideTabs />;
@@ -41,7 +41,7 @@ export const BestPracticesApp = () => (
   </QueryClientProvider>
 );
 
-const Content = ({ forcedTab, hideTabs, isFreshInstance }: AppProps) => {
+const Content = ({ forcedTab, hideTabs, instanceId }: AppProps) => {
   const { backendUrl, isLoading: backendLoading } = useBackendConfig();
   const { user, isLoading: authLoading, connect, isConnecting, disconnect, isDisconnecting, refetch: refetchAuth } = useAuth();
   const { refetchCampaigns } = useCampaigns();

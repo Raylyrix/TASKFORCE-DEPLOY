@@ -18,7 +18,7 @@ type WindowConfig = {
   sidebarIcon?: string;
   allowMultiple?: boolean;
   contentId: string;
-  render: (root: Root) => void;
+  render: (root: Root, instanceId?: string) => void;
 };
 
 type StoredWindowState = {
@@ -62,7 +62,7 @@ const windowConfigs: WindowConfig[] = [
     sidebarIcon: "✉️",
     allowMultiple: true,
     contentId: "taskforce-floating-composer-content",
-    render: (root, isFresh?: boolean) => root.render(<ComposerApp isFreshInstance={isFresh} />),
+    render: (root, instanceId?: string) => root.render(<ComposerApp instanceId={instanceId} />),
   },
   {
     id: FLOATING_FOLLOWUPS_ID,
@@ -647,13 +647,14 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   persistState(windowState);
   
   // If this is a new composer (spawned via plus button), mark it as fresh
-  // This flag will be checked when the store initializes to prevent loading cached draft
+  // Store the instanceId in sessionStorage so the component can detect it's fresh
   const isFresh = isNewComposer && config.id === FLOATING_COMPOSER_ID;
   if (isFresh) {
     try {
-      window.sessionStorage.setItem("taskforce-fresh-instance-flag", "true");
+      // Store the fresh instanceId so the component can identify itself
+      window.sessionStorage.setItem("taskforce-fresh-instance-id", instanceId);
     } catch (error) {
-      console.warn("[TaskForce] Failed to set fresh instance flag", error);
+      console.warn("[TaskForce] Failed to set fresh instance ID", error);
     }
   }
   
@@ -861,7 +862,7 @@ const createWindowInstance = (config: WindowConfig, state: StoredWindowState, is
   let root: Root;
   try {
     root = createRoot(content);
-    config.render(root, isFresh);
+    config.render(root, state.instanceId);
     console.log(`[TaskForce] Window "${config.title}" rendered successfully`);
   } catch (error) {
     console.error(`[TaskForce] Failed to render window "${config.title}":`, error);
