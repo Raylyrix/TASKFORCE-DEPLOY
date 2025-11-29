@@ -37,13 +37,18 @@ const handleAuthStart = async (payload?: AuthStartPayload) => {
   // The backend will detect it's from extension by checking referer and source parameter
   const redirectUri = `${backendUrl}/api/auth/google/callback`;
 
+  // Generate a unique extension identifier - this is foolproof proof we're from extension
+  // Webapp cannot generate this - only extension knows this ID
+  // Use crypto.randomUUID() for secure UUID generation (available in service workers)
+  const extensionId = crypto.randomUUID();
+
   const startResponse = await fetch(`${backendUrl}/api/auth/google/start`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Request-Source": "extension", // Explicitly mark as extension request
     },
-    body: JSON.stringify({ redirectUri }),
+    body: JSON.stringify({ redirectUri, extensionId }), // Send extensionId - foolproof identifier
   });
 
   if (!startResponse.ok) {

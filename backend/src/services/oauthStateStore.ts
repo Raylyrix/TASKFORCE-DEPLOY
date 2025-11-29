@@ -5,6 +5,7 @@ const STATE_TTL_MS = 5 * 60 * 1000;
 type OAuthStatePayload = {
   redirectUri?: string;
   source?: "extension" | "webapp"; // Track where OAuth was initiated from
+  extensionId?: string; // Extension-specific identifier - only extension sets this
 };
 
 type OAuthStateEntry = OAuthStatePayload & {

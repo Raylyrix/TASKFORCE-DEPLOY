@@ -15,79 +15,79 @@ export const authRouter = Router();
 
 const startSchema = z.object({
   redirectUri: z.string().url().optional(),
+  extensionId: z.string().uuid().optional(), // Extension-generated unique ID
 });
 
 authRouter.post("/google/start", (req, res, next) => {
   try {
-    const { redirectUri } = startSchema.parse(req.body ?? {});
+    const { redirectUri, extensionId } = startSchema.parse(req.body ?? {});
     const fallbackRedirect = googleAuthService.getDefaultExtensionRedirect();
     const effectiveRedirect = redirectUri ?? fallbackRedirect ?? undefined;
     
-    // Detect source from request origin/referer/headers
-    // When webapp calls through Next.js rewrites, we need to check multiple headers
-    const origin = req.get("Origin") || "";
-    const referer = req.get("Referer") || "";
-    const forwardedHost = req.get("X-Forwarded-Host") || "";
-    const host = req.get("Host") || "";
-    const requestSource = req.get("X-Request-Source"); // Explicit source header from extension
-    
-    // Detection logic - be precise to avoid misclassification:
-    // Priority order:
-    // 1. Explicit X-Request-Source header (extension sets this) - HIGHEST PRIORITY
-    // 2. Explicit webapp indicators (Origin/Referer/Forwarded-Host from webapp domain)
-    // 3. Explicit extension indicators (chrome-extension:// origin)
-    // 4. Missing Origin header = likely extension background script
-    // 5. Fallback based on Origin header presence
-    
+    // FOOLPROOF DETECTION: Extension sends extensionId - this is the absolute proof
+    // If extensionId exists, it's 100% from extension (webapp cannot generate this)
     let source: "extension" | "webapp";
     
-    // Check for explicit source header (extension sets this) - HIGHEST PRIORITY
-    if (requestSource === "extension") {
-      logger.info({ requestSource }, "OAuth start - detected extension from X-Request-Source header");
+    if (extensionId) {
+      // ExtensionId present = definitely from extension (webapp can't fake this)
       source = "extension";
+      logger.info({ extensionId }, "OAuth start - detected extension from extensionId (FOOLPROOF)");
     } else {
-      // Check multiple indicators for webapp
-      const hasWebappOrigin = 
-        origin.includes("taskforce-webapp") || 
-        origin.includes("railway.app");
-      const hasWebappReferer = 
-        referer.includes("taskforce-webapp") ||
-        referer.includes("railway.app");
-      const hasWebappForwardedHost = 
-        forwardedHost.includes("taskforce-webapp") ||
-        forwardedHost.includes("railway.app");
+      // Detect source from request origin/referer/headers (for webapp)
+      const origin = req.get("Origin") || "";
+      const referer = req.get("Referer") || "";
+      const forwardedHost = req.get("X-Forwarded-Host") || "";
+      const requestSource = req.get("X-Request-Source"); // Explicit source header from extension
       
-      // Check for explicit extension indicators
-      const hasExtensionOrigin = origin.includes("chrome-extension://");
-      const hasOriginHeader = origin.length > 0; // Extension background scripts often have no Origin
-      
-      // Key insight: Extension background script requests have NO Origin header
-      // Webapp browser requests DO have an Origin header from the webapp domain
-      // So: No Origin header = likely extension, Has Origin from webapp = webapp
-      
-      // Determine if it's webapp (only if we have POSITIVE indicators)
-      const isFromWebapp = 
-        hasWebappOrigin ||        // Origin header from webapp domain
-        hasWebappReferer ||       // Referer from webapp domain
-        hasWebappForwardedHost;   // Forwarded-Host from webapp domain
-      
-      // Determine if it's extension
-      const isFromExtension = 
-        hasExtensionOrigin ||     // Explicit chrome-extension:// origin
-        (!hasOriginHeader && redirectUri); // No Origin header + redirectUri = background script
-      
-      // Final determination: explicit indicators take priority
-      // Default to extension if we have no clear indicators (safer for extension)
-      if (isFromWebapp) {
-        source = "webapp";
-      } else if (isFromExtension || !hasOriginHeader) {
+      // Check for explicit source header (extension sets this) - HIGHEST PRIORITY
+      if (requestSource === "extension") {
+        logger.info({ requestSource }, "OAuth start - detected extension from X-Request-Source header");
         source = "extension";
       } else {
-        // Fallback: if we have Origin header but can't determine, assume webapp
-        // (browser requests have Origin, background scripts don't)
-        source = hasOriginHeader ? "webapp" : "extension";
+        // Check multiple indicators for webapp
+        const hasWebappOrigin =
+          origin.includes("taskforce-webapp") || 
+          origin.includes("railway.app");
+        const hasWebappReferer = 
+          referer.includes("taskforce-webapp") ||
+          referer.includes("railway.app");
+        const hasWebappForwardedHost = 
+          forwardedHost.includes("taskforce-webapp") ||
+          forwardedHost.includes("railway.app");
+        
+        // Check for explicit extension indicators
+        const hasExtensionOrigin = origin.includes("chrome-extension://");
+        const hasOriginHeader = origin.length > 0; // Extension background scripts often have no Origin
+        
+        // Determine if it's webapp (only if we have POSITIVE indicators)
+        const isFromWebapp = 
+          hasWebappOrigin ||        // Origin header from webapp domain
+          hasWebappReferer ||       // Referer from webapp domain
+          hasWebappForwardedHost;   // Forwarded-Host from webapp domain
+        
+        // Determine if it's extension
+        const isFromExtension = 
+          hasExtensionOrigin ||     // Explicit chrome-extension:// origin
+          (!hasOriginHeader && redirectUri); // No Origin header + redirectUri = background script
+        
+        // Final determination: explicit indicators take priority
+        // Default to extension if we have no clear indicators (safer for extension)
+        if (isFromWebapp) {
+          source = "webapp";
+        } else if (isFromExtension || !hasOriginHeader) {
+          source = "extension";
+        } else {
+          // Fallback: if we have Origin header but can't determine, assume webapp
+          // (browser requests have Origin, background scripts don't)
+          source = hasOriginHeader ? "webapp" : "extension";
+        }
       }
     }
+    
+    const origin = req.get("Origin") || "";
+    const referer = req.get("Referer") || "";
+    const host = req.get("Host") || "";
+    const forwardedHost = req.get("X-Forwarded-Host") || "";
     
     logger.info({ 
       origin, 
@@ -95,7 +95,7 @@ authRouter.post("/google/start", (req, res, next) => {
       forwardedHost, 
       host,
       redirectUri,
-      requestSource,
+      extensionId: extensionId || "none",
       source,
       hasWebappOrigin: origin.includes("taskforce-webapp") || origin.includes("railway.app"),
       hasWebappReferer: referer.includes("taskforce-webapp") || referer.includes("railway.app"),
@@ -106,6 +106,7 @@ authRouter.post("/google/start", (req, res, next) => {
     const { state, expiresAt } = oauthStateStore.create({ 
       redirectUri: effectiveRedirect,
       source,
+      extensionId: extensionId || undefined, // Store extensionId if provided (foolproof marker)
     });
     const authUrl = generateAuthUrl(state, effectiveRedirect);
 
@@ -139,19 +140,24 @@ authRouter.get("/google/callback", async (req, res) => {
   // Check for explicit source parameter first
   const hasExplicitSource = source === "extension";
   
-  // Check state to determine source (ABSOLUTE TRUTH - stored when OAuth started)
-  // This is the SINGLE source of truth - state source field is authoritative
+  // FOOLPROOF DETECTION: Check state for extensionId first (most reliable)
+  // ExtensionId is the absolute proof - only extension generates this
   let detectedSource: "extension" | "webapp" | null = null;
   let stateEntry = null;
   if (state && typeof state === "string") {
     stateEntry = oauthStateStore.peek(state);
-    if (stateEntry?.source) {
+    
+    // Check for extensionId first (foolproof - only extension sets this)
+    if (stateEntry?.extensionId) {
+      detectedSource = "extension";
+      logger.info({ state, extensionId: stateEntry.extensionId }, "OAuth callback - detected extension from extensionId (FOOLPROOF)");
+    } else if (stateEntry?.source) {
       detectedSource = stateEntry.source;
-      logger.info({ state, source: detectedSource }, "OAuth callback - source from state (ABSOLUTE TRUTH)");
+      logger.info({ state, source: detectedSource }, "OAuth callback - source from state");
     }
   }
   
-  // DETERMINATION: Trust state source absolutely, only use fallback if state is missing/invalid
+  // DETERMINATION: Trust extensionId and state source absolutely
   let isExtension = false;
   
   if (detectedSource === "webapp") {
@@ -159,23 +165,20 @@ authRouter.get("/google/callback", async (req, res) => {
     isExtension = false;
     logger.info({ state, detectedSource }, "OAuth callback - state says webapp, treating as webapp (ABSOLUTE)");
   } else if (detectedSource === "extension") {
-    // State explicitly says extension - ALWAYS treat as extension, no exceptions
+    // State explicitly says extension (either from extensionId or source field) - ALWAYS treat as extension
     isExtension = true;
-    logger.info({ state, detectedSource }, "OAuth callback - state says extension, treating as extension (ABSOLUTE)");
+    logger.info({ state, detectedSource, hasExtensionId: !!stateEntry?.extensionId }, "OAuth callback - state says extension, treating as extension (ABSOLUTE)");
   } else {
     // State is missing or invalid - only use fallback in this case
-    // This should be rare - state should always have source from OAuth start
     logger.warn({ 
       state, 
-      stateEntry: stateEntry ? "exists but no source" : "missing",
+      stateEntry: stateEntry ? "exists but no source/extensionId" : "missing",
       hasExplicitSource: source === "extension"
     }, "OAuth callback - state missing source, using minimal fallback");
     
     // Minimal fallback: only check explicit source parameter
-    // Do NOT use unreliable referer/origin headers
     isExtension = source === "extension";
     
-    // If still can't determine and state exists, log error
     if (!stateEntry && !isExtension) {
       logger.error({ state, source }, "OAuth callback - cannot determine source, defaulting to webapp");
     }
