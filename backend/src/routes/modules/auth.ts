@@ -22,7 +22,20 @@ authRouter.post("/google/start", (req, res, next) => {
     const { redirectUri } = startSchema.parse(req.body ?? {});
     const fallbackRedirect = googleAuthService.getDefaultExtensionRedirect();
     const effectiveRedirect = redirectUri ?? fallbackRedirect ?? undefined;
-    const { state, expiresAt } = oauthStateStore.create({ redirectUri: effectiveRedirect });
+    
+    // Detect source from request origin/referer
+    const origin = req.get("Origin") || "";
+    const referer = req.get("Referer") || "";
+    const isFromWebapp = origin.includes("taskforce-webapp") || 
+                         origin.includes("railway.app") ||
+                         referer.includes("taskforce-webapp") ||
+                         referer.includes("railway.app");
+    const source = isFromWebapp ? "webapp" : "extension";
+    
+    const { state, expiresAt } = oauthStateStore.create({ 
+      redirectUri: effectiveRedirect,
+      source,
+    });
     const authUrl = generateAuthUrl(state, effectiveRedirect);
 
     res.status(200).json({
@@ -47,23 +60,41 @@ authRouter.get("/google/callback", async (req, res) => {
   
   // Detect if this is from extension using multiple methods:
   // 1. Explicit source=extension query parameter (most reliable)
-  // 2. Referer header analysis (fallback)
-  // 3. User-Agent patterns (additional check)
+  // 2. Check redirectUri stored in OAuth state (most accurate - stored when OAuth started)
+  // 3. Referer header analysis (fallback - less reliable since Google redirects)
   const referer = req.get("Referer") || "";
   const userAgent = req.get("User-Agent") || "";
   
   // Check for explicit source parameter first
   const hasExplicitSource = source === "extension";
   
-  // Extension detection fallback logic:
+  // Check state to determine source (most reliable - stored when OAuth started)
+  let isExtensionByState = false;
+  if (state && typeof state === "string") {
+    const stateEntry = oauthStateStore.peek(state);
+    if (stateEntry?.source) {
+      isExtensionByState = stateEntry.source === "extension";
+    }
+  }
+  
+  // Extension detection fallback logic (if state doesn't have source):
   // - Extension opens OAuth in a new tab directly (no referer or referer is from Google)
   // - Webapp redirects from its own domain (has referer from webapp)
   const isFromGoogle = referer.includes("accounts.google.com") || referer.includes("google.com");
   const isFromWebapp = referer.includes("taskforce-webapp") || referer.includes("railway.app");
-  const isExtensionByReferer = (isFromGoogle || !referer) && !isFromWebapp;
   
-  // Final determination: explicit source takes precedence, then referer analysis
-  const isExtension = hasExplicitSource || isExtensionByReferer;
+  // Better detection: Check Origin header (webapp sends it, extension doesn't)
+  const origin = req.get("Origin") || "";
+  const hasWebappOrigin = origin.includes("taskforce-webapp") || origin.includes("railway.app");
+  
+  // Extension: no Origin header AND (no referer or Google referer) AND not explicitly from webapp
+  const isExtensionByReferer = !hasWebappOrigin && (isFromGoogle || !referer) && !isFromWebapp;
+  
+  // Final determination: 
+  // 1. Explicit source parameter (most reliable)
+  // 2. State source field (stored when OAuth started - very reliable)
+  // 3. Origin/referer analysis (fallback)
+  const isExtension = hasExplicitSource || (state && typeof state === "string" && oauthStateStore.peek(state)?.source === "extension") || (isExtensionByReferer && !hasWebappOrigin);
   
   // If there's an error from Google
   if (error) {

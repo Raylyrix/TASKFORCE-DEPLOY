@@ -4,6 +4,7 @@ const STATE_TTL_MS = 5 * 60 * 1000;
 
 type OAuthStatePayload = {
   redirectUri?: string;
+  source?: "extension" | "webapp"; // Track where OAuth was initiated from
 };
 
 type OAuthStateEntry = OAuthStatePayload & {
@@ -34,6 +35,11 @@ export const oauthStateStore = {
     };
     stateStore.set(state, entry);
     return { state, expiresAt: entry.expiresAt };
+  },
+  peek(state: string): OAuthStateEntry | null {
+    purgeExpiredStates();
+    const entry = stateStore.get(state);
+    return entry || null;
   },
   consume(state: string) {
     purgeExpiredStates();
