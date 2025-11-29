@@ -624,13 +624,21 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     },
   });
 
+  // Read offsetConfig to check if this is a nested follow-up
+  const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
+  const isNested = offsetConfig?.isNested ?? false;
+  const parentStepId = offsetConfig?.parentStepId;
+  const sendAsReply = offsetConfig?.sendAsReply ?? false;
+
+  // For nested follow-ups, we need to find the parent follow-up message
+  // For regular follow-ups, we need to find the original campaign message
   const recipient = await prisma.campaignRecipient.findUnique({
     where: { id: job.recipientId },
     include: {
       messages: {
-        where: {
-          followUpStepId: null, // Original campaign message, not a follow-up
-        },
+        where: isNested && parentStepId
+          ? { followUpStepId: parentStepId } // For nested: find parent follow-up message
+          : { followUpStepId: null }, // For regular: find original campaign message
         orderBy: {
           createdAt: "desc",
         },
@@ -648,12 +656,8 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   const stopOnReply = job.stopOnReply ?? false;
   const stopOnOpen = job.stopOnOpen ?? false;
 
-  // Get the original message for this recipient
-  const originalMessage = recipient.messages[0];
-  
-  // Read sendAsReply from offsetConfig
-  const offsetConfig = step.offsetConfig as { delayMs: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean };
-  const sendAsReply = offsetConfig?.sendAsReply ?? false;
+  // Get the message to reply to (original for regular follow-ups, parent for nested)
+  const messageToReplyTo = recipient.messages[0];
   
   // Get threadId and Message-ID for reply if needed
   let threadId: string | null = null;
@@ -661,37 +665,41 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   let references: string | null = null;
   let replySubject: string | null = null;
   
-  // Validate that we have the original message if sendAsReply is enabled
-  if (sendAsReply && !originalMessage) {
+  // Validate that we have the message to reply to if sendAsReply is enabled
+  if (sendAsReply && !messageToReplyTo) {
     logger.warn(
       { 
         recipientId: recipient.id, 
         followUpStepId: step.id,
+        isNested,
+        parentStepId,
         hasMessages: recipient.messages.length
       },
-      "sendAsReply is true but no original message found for recipient, sending as new email"
+      `sendAsReply is true but no ${isNested ? 'parent follow-up' : 'original'} message found for recipient, sending as new email`
     );
-  } else if (sendAsReply && originalMessage && originalMessage.status !== MessageStatus.SENT) {
+  } else if (sendAsReply && messageToReplyTo && messageToReplyTo.status !== MessageStatus.SENT) {
     logger.warn(
       { 
         recipientId: recipient.id, 
         followUpStepId: step.id,
-        messageLogId: originalMessage.id,
-        messageStatus: originalMessage.status
+        messageLogId: messageToReplyTo.id,
+        messageStatus: messageToReplyTo.status,
+        isNested
       },
-      "sendAsReply is true but original message was not sent successfully, sending as new email"
+      `sendAsReply is true but ${isNested ? 'parent follow-up' : 'original'} message was not sent successfully, sending as new email`
     );
-  } else if (sendAsReply && originalMessage && !originalMessage.gmailMessageId) {
+  } else if (sendAsReply && messageToReplyTo && !messageToReplyTo.gmailMessageId) {
     logger.warn(
       { 
         recipientId: recipient.id, 
         followUpStepId: step.id,
-        messageLogId: originalMessage.id,
-        messageStatus: originalMessage.status
+        messageLogId: messageToReplyTo.id,
+        messageStatus: messageToReplyTo.status,
+        isNested
       },
-      "sendAsReply is true but original message has no gmailMessageId, sending as new email"
+      `sendAsReply is true but ${isNested ? 'parent follow-up' : 'original'} message has no gmailMessageId, sending as new email`
     );
-  } else if (sendAsReply && originalMessage?.gmailMessageId && originalMessage.status === MessageStatus.SENT) {
+  } else if (sendAsReply && messageToReplyTo?.gmailMessageId && messageToReplyTo.status === MessageStatus.SENT) {
     // Fetch the Gmail message to get threadId and Message-ID
     try {
       const authClient = await googleAuthService.getAuthorizedClientForUser(step.sequence.campaign.userId);
@@ -703,7 +711,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       
       const gmailMessage = await gmail.users.messages.get({
         userId: "me",
-        id: originalMessage.gmailMessageId,
+        id: messageToReplyTo.gmailMessageId,
         format: "metadata",
         metadataHeaders: ["Message-ID", "Subject", "References"],
       });
@@ -744,20 +752,23 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
         logger.info(
           { 
             recipientId: recipient.id, 
-            followUpStepId: step.id, 
+            followUpStepId: step.id,
+            isNested,
+            parentStepId,
             threadId, 
             inReplyTo,
-            originalMessageId: originalMessage.gmailMessageId,
+            messageId: messageToReplyTo.gmailMessageId,
             replySubject
           },
-          "Successfully fetched threadId and Message-ID for reply follow-up"
+          `Successfully fetched threadId and Message-ID for ${isNested ? 'nested' : 'regular'} reply follow-up`
         );
       } else {
         logger.warn(
           { 
             recipientId: recipient.id,
             followUpStepId: step.id,
-            originalMessageId: originalMessage.gmailMessageId,
+            isNested,
+            messageId: messageToReplyTo.gmailMessageId,
             hasThreadId: !!threadId,
             hasInReplyTo: !!inReplyTo,
             headersFound: Object.keys(headers).length
@@ -786,10 +797,12 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
 
   if (originalMessage) {
     // Check if we should stop based on reply
+    // For nested follow-ups, check replies to the parent follow-up
+    // For regular follow-ups, check replies to the original message
     if (stopOnReply || condition === "if_not_replied") {
       const hasReply = await prisma.trackingEvent.findFirst({
         where: {
-          messageLogId: originalMessage.id,
+          messageLogId: messageToReplyTo.id,
           type: "REPLY",
         },
       });
@@ -815,7 +828,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     if (stopOnOpen || condition === "if_not_opened") {
       const hasOpen = await prisma.trackingEvent.findFirst({
         where: {
-          messageLogId: originalMessage.id,
+          messageLogId: messageToReplyTo.id,
           type: "OPEN",
         },
       });
@@ -843,7 +856,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
     if (condition === "if_not_clicked") {
       const hasClick = await prisma.trackingEvent.findFirst({
         where: {
-          messageLogId: originalMessage.id,
+          messageLogId: messageToReplyTo.id,
           type: "CLICK",
         },
       });
@@ -897,9 +910,11 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
         followUpStepId: step.id,
         hasThreadId: !!threadId,
         hasInReplyTo: !!inReplyTo,
-        hasGmailMessageId: !!originalMessage?.gmailMessageId
+        hasGmailMessageId: !!messageToReplyTo?.gmailMessageId,
+        isNested,
+        parentStepId
       },
-      "sendAsReply is true but missing required reply data, sending as new email instead"
+      `sendAsReply is true but missing required reply data for ${isNested ? 'nested' : 'regular'} follow-up, sending as new email instead`
     );
   }
 
