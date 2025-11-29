@@ -10,10 +10,11 @@ export default function HelpPage() {
       title: "Getting Started",
       icon: Book,
       items: [
-        { title: "Creating Your First Campaign", href: "#" },
-        { title: "Connecting Your Gmail Account", href: "#" },
-        { title: "Setting Up Calendar Sync", href: "#" },
-        { title: "Understanding the Dashboard", href: "#" },
+        { title: "Install the Chrome Extension", href: "/installation" },
+        { title: "Creating Your First Campaign", href: "/campaigns/new" },
+        { title: "Connecting Your Gmail Account", href: "/settings" },
+        { title: "Setting Up Calendar Sync", href: "/settings" },
+        { title: "Understanding the Dashboard", href: "/dashboard" },
       ],
     },
     {
@@ -75,6 +76,18 @@ export default function HelpPage() {
 
         {/* Quick Links */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <Link
+            href="/installation"
+            className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"
+          >
+            <Book className="w-8 h-8 text-primary-600 mb-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Installation Guide
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              Step-by-step guide to install the TaskForce Chrome extension.
+            </p>
+          </Link>
           <Link
             href="/help/getting-started"
             className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:border-primary-500 transition-colors"

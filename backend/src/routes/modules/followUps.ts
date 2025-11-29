@@ -211,7 +211,7 @@ followUpsRouter.get("/:campaignId", requireUser, async (req, res, next) => {
   }
 });
 
-// Manual follow-up sending endpoint (not tied to a campaign)
+// Manual follow-up sending endpoint (can optionally be tied to a campaign)
 const manualFollowUpSchema = z.object({
   to: z.string().email(),
   subject: z.string().min(1),
@@ -220,7 +220,12 @@ const manualFollowUpSchema = z.object({
   replyToMessageId: z.string().optional(), // Gmail message ID to reply to
   parentFollowUpId: z.string().optional(), // If this is a nested follow-up, the parent follow-up message log ID
   isNested: z.boolean().optional().default(false),
-});
+  campaignId: z.string().optional(), // Optional: add this follow-up to an existing campaign
+  recipientEmail: z.string().email().optional(), // Required if campaignId is provided - the recipient email in the campaign
+}).refine(
+  (data) => !data.campaignId || data.recipientEmail,
+  { message: "recipientEmail is required when campaignId is provided" }
+);
 
 followUpsRouter.post("/send", requireUser, async (req, res, next) => {
   try {
@@ -325,14 +330,74 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
       isCampaign: false, // Manual follow-up, not a campaign
     });
 
-    // Optionally save to message log if parentFollowUpId is provided (for nested follow-ups)
-    if (payload.isNested && payload.parentFollowUpId) {
+    // If campaignId is provided, find or create the recipient and save to message log
+    let messageLogId: string | null = null;
+    if (payload.campaignId && payload.recipientEmail) {
+      // Verify the campaign belongs to the user
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: payload.campaignId },
+      });
+
+      if (!campaign || campaign.userId !== req.currentUser.id) {
+        res.status(404).json({ error: "Campaign not found" });
+        return;
+      }
+
+      // Find or create the campaign recipient
+      let recipient = await prisma.campaignRecipient.findFirst({
+        where: {
+          campaignId: payload.campaignId,
+          email: payload.recipientEmail,
+        },
+      });
+
+      if (!recipient) {
+        // Create a new recipient for this campaign
+        recipient = await prisma.campaignRecipient.create({
+          data: {
+            campaignId: payload.campaignId,
+            email: payload.recipientEmail,
+            status: "SENT",
+            payload: {},
+            lastSentAt: new Date(),
+          },
+        });
+      }
+
+      // Determine the follow-up step ID if this is a nested follow-up
+      let followUpStepId: string | null = null;
+      if (payload.isNested && payload.parentFollowUpId) {
+        const parentMessage = await prisma.messageLog.findUnique({
+          where: { id: payload.parentFollowUpId },
+        });
+        // If parent has a follow-up step, link to it
+        if (parentMessage?.followUpStepId) {
+          followUpStepId = parentMessage.followUpStepId;
+        }
+      }
+
+      // Create message log entry
+      const messageLog = await prisma.messageLog.create({
+        data: {
+          campaignId: payload.campaignId,
+          campaignRecipientId: recipient.id,
+          followUpStepId,
+          subject: finalSubject,
+          to: payload.to,
+          status: "SENT",
+          sendAt: new Date(),
+          gmailMessageId: sendResult.id,
+        },
+      });
+      messageLogId = messageLog.id;
+    } else if (payload.isNested && payload.parentFollowUpId) {
+      // Save to message log if parentFollowUpId is provided (for nested follow-ups without campaign)
       const parentMessage = await prisma.messageLog.findUnique({
         where: { id: payload.parentFollowUpId },
       });
 
       if (parentMessage && parentMessage.campaignRecipientId) {
-        await prisma.messageLog.create({
+        const messageLog = await prisma.messageLog.create({
           data: {
             campaignId: parentMessage.campaignId,
             campaignRecipientId: parentMessage.campaignRecipientId,
@@ -343,12 +408,14 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
             gmailMessageId: sendResult.id,
           },
         });
+        messageLogId = messageLog.id;
       }
     }
 
     res.status(200).json({ 
       success: true, 
       messageId: sendResult.id,
+      messageLogId,
       sentAsReply: canSendAsReply,
     });
   } catch (error) {
