@@ -506,7 +506,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             onKeyDown={handleEditorKeyDown}
             onFocus={() => requestAnimationFrame(updateAutocomplete)}
             onClick={() => requestAnimationFrame(updateAutocomplete)}
-            className="min-h-[280px] p-4 rounded-xl border border-gray-300 bg-white text-sm leading-relaxed overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="min-h-[280px] p-4 rounded-xl border border-gray-300 bg-white text-sm text-gray-900 leading-relaxed overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            style={{ color: '#111827' }}
             suppressContentEditableWarning
           />
 

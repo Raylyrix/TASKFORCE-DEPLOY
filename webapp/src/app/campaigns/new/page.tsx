@@ -613,7 +613,7 @@ export default function NewCampaignPage() {
           <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-4xl font-bold mb-3 flex items-center gap-3">
+                <h1 className="text-4xl font-bold mb-3 flex items-center gap-3 text-gray-900">
                   <Sparkles className="w-10 h-10 text-gray-900" />
                   Create Email Campaign
                 </h1>
@@ -669,8 +669,8 @@ export default function NewCampaignPage() {
                           setErrors({});
                         }}
                         placeholder="https://docs.google.com/spreadsheets/d/..."
-                        className={`flex-1 px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all ${
-                          errors.sheet ? "border-red-300 bg-red-50" : "border-gray-300 hover:border-indigo-300"
+                        className={`flex-1 px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-gray-900 ${
+                          errors.sheet ? "border-red-300 bg-red-50" : "border-gray-300 bg-white hover:border-indigo-300"
                         }`}
                       />
                       <input
@@ -679,7 +679,7 @@ export default function NewCampaignPage() {
                         value={headerRowIndex}
                         onChange={(e) => setHeaderRowIndex(Number(e.target.value))}
                         placeholder="Row"
-                        className="w-20 px-3 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-20 px-3 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-900"
                       />
                       <button
                         onClick={handleImport}
@@ -865,8 +865,8 @@ export default function NewCampaignPage() {
                           }, 200);
                         }}
                         placeholder="Hello {{firstName}}, ready for an exciting opportunity?"
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300 ${
-                          errors.subject ? "border-red-300 bg-red-50" : "border-gray-300"
+                        className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all hover:border-indigo-300 text-gray-900 ${
+                          errors.subject ? "border-red-300 bg-red-50" : "border-gray-300 bg-white"
                         }`}
                       />
                       <MergeFieldAutocomplete
@@ -1177,7 +1177,7 @@ export default function NewCampaignPage() {
                               setPreviewIndex(0);
                             }}
                             placeholder="Filter recipients..."
-                            className="w-full px-3 py-2 text-sm border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 text-sm border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                           />
                         </div>
                       )}

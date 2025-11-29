@@ -41,6 +41,8 @@ export const MergeFieldAutocomplete = ({
     if (visible && anchorRect) {
       const portalTarget = ensurePortalContainer();
       setContainer(portalTarget);
+    } else {
+      setContainer(null);
     }
   }, [visible, anchorRect]);
 
@@ -49,23 +51,23 @@ export const MergeFieldAutocomplete = ({
   }
 
   const hasSuggestions = suggestions.length > 0;
-  const top = anchorRect.bottom + window.scrollY + 4;
-  const left = anchorRect.left + window.scrollX;
+  const top = anchorRect.bottom + 4;
+  const left = anchorRect.left;
   const width = anchorRect.width;
 
   const content = (
     <div
       style={{
-        position: "absolute",
-        top,
-        left,
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
         minWidth: Math.max(width, 220),
         maxWidth: 320,
         background: "#ffffff",
         border: "1px solid rgba(60,64,67,0.18)",
         borderRadius: "10px",
         boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
-        zIndex: 9999,
+        zIndex: 99999,
         overflow: "hidden",
         fontFamily: "Roboto, Arial, sans-serif",
       }}
