@@ -211,6 +211,140 @@ followUpsRouter.get("/:campaignId", requireUser, async (req, res, next) => {
   }
 });
 
+// Manual follow-up sending endpoint (not tied to a campaign)
+const manualFollowUpSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1),
+  html: z.string().min(1),
+  sendAsReply: z.boolean().optional().default(false),
+  replyToMessageId: z.string().optional(), // Gmail message ID to reply to
+  parentFollowUpId: z.string().optional(), // If this is a nested follow-up, the parent follow-up message log ID
+  isNested: z.boolean().optional().default(false),
+});
+
+followUpsRouter.post("/send", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const payload = manualFollowUpSchema.parse(req.body ?? {});
+
+    // Import required services
+    const { gmailDeliveryService } = await import("../../services/gmailDelivery.js");
+    const { googleAuthService } = await import("../../services/googleAuth.js");
+    const { htmlToText } = await import("html-to-text");
+
+    let threadId: string | null = null;
+    let inReplyTo: string | null = null;
+    let references: string | null = null;
+    let replySubject: string | null = null;
+
+    // If sendAsReply is true, fetch the message to reply to
+    if (payload.sendAsReply && payload.replyToMessageId) {
+      try {
+        const authClient = await googleAuthService.getAuthorizedClientForUser(req.currentUser.id);
+        const { google } = await import("googleapis");
+        const gmail = google.gmail({
+          version: "v1",
+          auth: authClient,
+        });
+        
+        const gmailMessage = await gmail.users.messages.get({
+          userId: "me",
+          id: payload.replyToMessageId,
+          format: "metadata",
+          metadataHeaders: ["Message-ID", "Subject", "References"],
+        });
+        
+        threadId = gmailMessage.data.threadId ?? null;
+        
+        // Extract Message-ID and References from headers
+        const headers = (gmailMessage.data.payload?.headers ?? []).reduce(
+          (acc, header) => {
+            if (header.name && header.value) {
+              acc[header.name.toLowerCase()] = header.value;
+            }
+            return acc;
+          },
+          {} as Record<string, string>,
+        );
+        
+        const originalMessageId = headers["message-id"];
+        const originalReferences = headers["references"];
+        const originalSubject = headers["subject"] || "";
+        
+        if (originalMessageId) {
+          inReplyTo = originalMessageId;
+          references = originalReferences 
+            ? `${originalReferences} ${originalMessageId}`
+            : originalMessageId;
+        }
+        
+        // Format reply subject
+        if (originalSubject && !originalSubject.startsWith("Re:")) {
+          replySubject = `Re: ${originalSubject}`;
+        } else {
+          replySubject = originalSubject;
+        }
+      } catch (error) {
+        // If we can't fetch the message, log warning but continue
+        console.warn("Failed to fetch Gmail message for reply threading:", error);
+      }
+    }
+
+    // Use reply subject if available, otherwise use provided subject
+    const finalSubject = (payload.sendAsReply && replySubject) ? replySubject : payload.subject;
+    const canSendAsReply = payload.sendAsReply && threadId && inReplyTo;
+
+    // Send the email
+    const sendResult = await gmailDeliveryService.sendEmailViaGmail({
+      userId: req.currentUser.id,
+      to: payload.to,
+      subject: finalSubject,
+      bodyHtml: payload.html,
+      bodyText: htmlToText(payload.html),
+      threadId: canSendAsReply ? threadId : null,
+      inReplyTo: canSendAsReply ? inReplyTo : null,
+      references: canSendAsReply ? references : null,
+      isCampaign: false, // Manual follow-up, not a campaign
+    });
+
+    // Optionally save to message log if parentFollowUpId is provided (for nested follow-ups)
+    if (payload.isNested && payload.parentFollowUpId) {
+      const parentMessage = await prisma.messageLog.findUnique({
+        where: { id: payload.parentFollowUpId },
+        include: {
+          campaignRecipient: true,
+        },
+      });
+
+      if (parentMessage && parentMessage.campaignRecipient) {
+        await prisma.messageLog.create({
+          data: {
+            campaignId: parentMessage.campaignId,
+            campaignRecipientId: parentMessage.campaignRecipientId,
+            subject: finalSubject,
+            to: payload.to,
+            status: "SENT",
+            sendAt: new Date(),
+            gmailMessageId: sendResult.id,
+          },
+        });
+      }
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      messageId: sendResult.id,
+      sentAsReply: canSendAsReply,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 followUpsRouter.post("/automations", requireUser, async (req, res, next) => {
   try {
     if (!req.currentUser) {

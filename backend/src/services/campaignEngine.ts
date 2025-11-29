@@ -239,7 +239,23 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
         delayMs?: number | null;
         scheduledAt?: string | null; // ISO date string for absolute scheduling
         condition?: "always" | "if_not_opened" | "if_not_replied" | "if_not_clicked";
+        isNested?: boolean;
+        parentStepId?: string;
       }) ?? {};
+      
+      // Skip nested follow-ups - they will be scheduled when their parent follow-up is sent
+      if (stepOffset.isNested && stepOffset.parentStepId) {
+        logger.info(
+          {
+            campaignId,
+            recipientId,
+            followUpStepId: step.id,
+            parentStepId: stepOffset.parentStepId,
+          },
+          "Skipping nested follow-up - will be scheduled when parent follow-up is sent"
+        );
+        continue;
+      }
       
       // Calculate scheduled time: use absolute scheduledAt if provided, otherwise use relative delayMs
       let scheduledAt: Date;
@@ -326,6 +342,138 @@ const scheduleFollowUpsForMessage = async (campaignId: string, recipientId: stri
         },
         {
           delay: finalDelayMs, // BullMQ delay option - this is critical!
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 5000,
+          },
+        },
+      );
+    }
+  }
+};
+
+// Schedule nested follow-ups that have a specific parent step
+const scheduleNestedFollowUpsForStep = async (
+  campaignId: string,
+  recipientId: string,
+  parentStepId: string,
+  baseDate: Date
+) => {
+  const sequences = await prisma.followUpSequence.findMany({
+    where: { campaignId },
+    include: {
+      steps: {
+        orderBy: { order: "asc" },
+      },
+    },
+  });
+
+  for (const sequence of sequences) {
+    const sequenceSettings = (sequence.settings as { 
+      stopOnReply?: boolean;
+      stopOnOpen?: boolean;
+      maxFollowUps?: number;
+    } | null) ?? {};
+
+    // Find nested follow-ups that have this step as their parent
+    for (const step of sequence.steps) {
+      const stepOffset = (step.offsetConfig as { 
+        delayMs?: number | null;
+        scheduledAt?: string | null;
+        condition?: "always" | "if_not_opened" | "if_not_replied" | "if_not_clicked";
+        isNested?: boolean;
+        parentStepId?: string;
+      }) ?? {};
+      
+      // Only schedule if this is a nested follow-up with the matching parent
+      if (!stepOffset.isNested || stepOffset.parentStepId !== parentStepId) {
+        continue;
+      }
+      
+      // Calculate scheduled time: use absolute scheduledAt if provided, otherwise use relative delayMs
+      let scheduledAt: Date;
+      if (stepOffset.scheduledAt) {
+        scheduledAt = new Date(stepOffset.scheduledAt);
+        // Ensure scheduledAt is in the future
+        const now = new Date();
+        if (isBefore(scheduledAt, now)) {
+          // If scheduledAt is in the past, fall back to delayMs or default
+          const fallbackDelayMs = (stepOffset.delayMs != null && stepOffset.delayMs >= 0) 
+            ? stepOffset.delayMs 
+            : 48 * 60 * 60 * 1000;
+          scheduledAt = addMilliseconds(now, fallbackDelayMs);
+          logger.warn(
+            {
+              campaignId,
+              recipientId,
+              followUpStepId: step.id,
+              parentStepId,
+              originalScheduledAt: stepOffset.scheduledAt,
+              fallbackDelayMs,
+            },
+            "scheduledAt was in the past for nested follow-up, using delayMs fallback"
+          );
+        }
+      } else {
+        // Use delayMs if it's a valid number (not null, not undefined, >= 0)
+        const delayMs = (stepOffset.delayMs != null && stepOffset.delayMs >= 0)
+          ? stepOffset.delayMs
+          : 48 * 60 * 60 * 1000; // Default 48 hours
+        
+        if (stepOffset.delayMs == null || stepOffset.delayMs < 0) {
+          logger.warn(
+            {
+              campaignId,
+              recipientId,
+              followUpStepId: step.id,
+              parentStepId,
+              storedDelayMs: stepOffset.delayMs,
+              usingDefault: true,
+              defaultDelayMs: 48 * 60 * 60 * 1000,
+            },
+            "delayMs is missing or invalid in offsetConfig for nested follow-up, using 48-hour default"
+          );
+        }
+        
+        scheduledAt = addMilliseconds(baseDate, delayMs);
+      }
+      
+      // Calculate delay in milliseconds from now
+      const now = new Date();
+      const delayMs = Math.max(0, scheduledAt.getTime() - now.getTime());
+      
+      // Ensure minimum delay of 1 minute to prevent immediate sending
+      const minDelayMs = 60 * 1000; // 1 minute
+      const finalDelayMs = Math.max(minDelayMs, delayMs);
+      
+      logger.info(
+        {
+          campaignId,
+          recipientId,
+          followUpStepId: step.id,
+          parentStepId,
+          scheduledAt: scheduledAt.toISOString(),
+          delayMs: finalDelayMs,
+          delayHours: Math.round(finalDelayMs / (60 * 60 * 1000) * 100) / 100,
+        },
+        "Scheduling nested follow-up after parent follow-up"
+      );
+      
+      await followUpQueue.add(
+        "send-follow-up",
+        {
+          followUpSequenceId: sequence.id,
+          followUpStepId: step.id,
+          recipientId,
+          scheduledAt: scheduledAt.toISOString(),
+          attempt: 1,
+          condition: stepOffset.condition ?? "always",
+          stopOnReply: sequenceSettings.stopOnReply ?? false,
+          stopOnOpen: sequenceSettings.stopOnOpen ?? false,
+        },
+        {
+          delay: finalDelayMs,
           attempts: 3,
           backoff: {
             type: "exponential",
@@ -968,6 +1116,11 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       gmailMessageId: sendResult.id,
     },
   });
+
+  // If this is a follow-up message, schedule any nested follow-ups that have this step as their parent
+  if (step.id) {
+    await scheduleNestedFollowUpsForStep(step.sequence.campaignId, recipient.id, step.id, new Date());
+  }
 };
 
 const processTrackingEvent = async (job: TrackingEventJob) => {
