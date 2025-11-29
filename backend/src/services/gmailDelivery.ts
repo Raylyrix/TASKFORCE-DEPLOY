@@ -27,6 +27,28 @@ const toBase64Url = (input: string) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
+// Encode subject line for RFC 2047 (handles non-ASCII characters like bullets, emojis, etc.)
+const encodeSubject = (subject: string): string => {
+  // Check if subject contains non-ASCII characters
+  const hasNonAscii = /[^\x00-\x7F]/.test(subject);
+  
+  if (!hasNonAscii) {
+    return subject;
+  }
+  
+  // Encode using RFC 2047 format: =?charset?encoding?encoded-text?=
+  // Use UTF-8 and base64 encoding
+  const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+  // Split into chunks of 75 characters (RFC 2047 limit per encoded-word)
+  const chunks: string[] = [];
+  for (let i = 0; i < encoded.length; i += 75) {
+    chunks.push(encoded.slice(i, i + 75));
+  }
+  
+  // Join chunks with spaces and wrap each in =?UTF-8?B?...?=
+  return chunks.map(chunk => `=?UTF-8?B?${chunk}?=`).join(' ');
+};
+
 // Generate a unique Message-ID
 const generateMessageId = (userEmail: string): string => {
   const domain = userEmail.split("@")[1] || "gmail.com";
@@ -132,6 +154,9 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
   // Create plain text version if not provided (use HTML with signature for text conversion)
   const bodyText = payload.bodyText || htmlToText(bodyHtmlWithSignature);
 
+  // Encode subject line properly for non-ASCII characters (fixes encoding issues like Ã¢Â€Â¢)
+  const encodedSubject = encodeSubject(payload.subject);
+  
   // Build headers - CRITICAL: Don't use spam-triggering headers
   const headers: Array<[string, string]> = [
     ["Date", date],
@@ -139,7 +164,7 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
     ["To", payload.to],
     ["From", userEmail],
     ["Reply-To", userEmail], // Important: Set Reply-To to user's email
-    ["Subject", payload.subject],
+    ["Subject", encodedSubject], // Use encoded subject to prevent encoding issues
     ["MIME-Version", "1.0"],
   ];
 
