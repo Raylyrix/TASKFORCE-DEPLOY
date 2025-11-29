@@ -625,8 +625,9 @@ const destroyWindow = (instanceId: string) => {
 
 const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   const offset = 32;
+  const isNewComposer = base?.instanceId && base.instanceId !== config.id;
   const instanceId =
-    base?.instanceId && base.instanceId !== config.id
+    isNewComposer
       ? `${base.instanceId}-clone`
       : `${config.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -643,6 +644,21 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
 
   windowState[instanceId] = startState;
   persistState(windowState);
+  
+  // If this is a new composer (spawned via plus button), reset the draft to fresh state
+  if (isNewComposer && config.id === FLOATING_COMPOSER_ID) {
+    // Reset composer draft for new composer instances
+    // Use a small delay to ensure the React component has mounted
+    setTimeout(() => {
+      try {
+        const { useExtensionStore } = require("../shared/store");
+        useExtensionStore.getState().resetComposerDraft();
+      } catch (error) {
+        console.warn("[TaskForce] Failed to reset composer draft for new instance", error);
+      }
+    }, 100);
+  }
+  
   createWindowInstance(config, startState);
   setWindowVisibility(instanceId, true);
 };
