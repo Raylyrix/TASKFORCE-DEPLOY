@@ -29,46 +29,65 @@ authRouter.post("/google/start", (req, res, next) => {
     const referer = req.get("Referer") || "";
     const forwardedHost = req.get("X-Forwarded-Host") || "";
     const host = req.get("Host") || "";
+    const requestSource = req.get("X-Request-Source"); // Explicit source header from extension
     
-    // Key insight: Webapp ALWAYS provides redirectUri in the request body
-    // Extension provides redirectUri too, but we can check other indicators
-    // If redirectUri is provided and matches backend callback pattern, it's likely webapp
-    // Extension requests come directly from extension context (different origin patterns)
+    // Detection logic - be precise to avoid misclassification:
+    // Priority order:
+    // 1. Explicit X-Request-Source header (extension sets this) - HIGHEST PRIORITY
+    // 2. Explicit webapp indicators (Origin/Referer/Forwarded-Host from webapp domain)
+    // 3. Explicit extension indicators (chrome-extension:// origin)
+    // 4. Missing Origin header = likely extension background script
+    // 5. Fallback based on Origin header presence
     
-    // Check multiple indicators for webapp
-    const hasWebappOrigin = 
-      origin.includes("taskforce-webapp") || 
-      origin.includes("railway.app");
-    const hasWebappReferer = 
-      referer.includes("taskforce-webapp") ||
-      referer.includes("railway.app");
-    const hasWebappForwardedHost = 
-      forwardedHost.includes("taskforce-webapp") ||
-      forwardedHost.includes("railway.app");
+    let source: "extension" | "webapp";
     
-    // If redirectUri is provided, it's more likely from webapp (webapp always provides it)
-    // Extension also provides it, but we can distinguish by checking if it's a direct backend call
-    // Extension calls come from chrome-extension:// context, webapp from webapp domain
-    
-    // Detection logic:
-    // 1. If we have explicit webapp indicators (Origin/Referer/Forwarded-Host), it's webapp
-    // 2. If redirectUri is provided AND no chrome-extension origin, likely webapp
-    // 3. Default to webapp if redirectUri is provided (safer default - webapp always provides it)
-    // 4. Only treat as extension if we have explicit extension indicators
-    
-    // Check for explicit extension indicators
-    const hasExtensionOrigin = origin.includes("chrome-extension://");
-    
-    // Determine if it's webapp
-    const isFromWebapp = 
-      hasWebappOrigin ||
-      hasWebappReferer ||
-      hasWebappForwardedHost ||
-      // If redirectUri is provided and not from extension, assume webapp
-      (redirectUri && !hasExtensionOrigin);
-    
-    // Default to webapp if we can't determine (safer default since extension should be explicit)
-    const source = (isFromWebapp || redirectUri) && !hasExtensionOrigin ? "webapp" : "extension";
+    // Check for explicit source header (extension sets this) - HIGHEST PRIORITY
+    if (requestSource === "extension") {
+      logger.info({ requestSource }, "OAuth start - detected extension from X-Request-Source header");
+      source = "extension";
+    } else {
+      // Check multiple indicators for webapp
+      const hasWebappOrigin = 
+        origin.includes("taskforce-webapp") || 
+        origin.includes("railway.app");
+      const hasWebappReferer = 
+        referer.includes("taskforce-webapp") ||
+        referer.includes("railway.app");
+      const hasWebappForwardedHost = 
+        forwardedHost.includes("taskforce-webapp") ||
+        forwardedHost.includes("railway.app");
+      
+      // Check for explicit extension indicators
+      const hasExtensionOrigin = origin.includes("chrome-extension://");
+      const hasOriginHeader = origin.length > 0; // Extension background scripts often have no Origin
+      
+      // Key insight: Extension background script requests have NO Origin header
+      // Webapp browser requests DO have an Origin header from the webapp domain
+      // So: No Origin header = likely extension, Has Origin from webapp = webapp
+      
+      // Determine if it's webapp (only if we have POSITIVE indicators)
+      const isFromWebapp = 
+        hasWebappOrigin ||        // Origin header from webapp domain
+        hasWebappReferer ||       // Referer from webapp domain
+        hasWebappForwardedHost;   // Forwarded-Host from webapp domain
+      
+      // Determine if it's extension
+      const isFromExtension = 
+        hasExtensionOrigin ||     // Explicit chrome-extension:// origin
+        (!hasOriginHeader && redirectUri); // No Origin header + redirectUri = background script
+      
+      // Final determination: explicit indicators take priority
+      // Default to extension if we have no clear indicators (safer for extension)
+      if (isFromWebapp) {
+        source = "webapp";
+      } else if (isFromExtension || !hasOriginHeader) {
+        source = "extension";
+      } else {
+        // Fallback: if we have Origin header but can't determine, assume webapp
+        // (browser requests have Origin, background scripts don't)
+        source = hasOriginHeader ? "webapp" : "extension";
+      }
+    }
     
     logger.info({ 
       origin, 
@@ -76,10 +95,12 @@ authRouter.post("/google/start", (req, res, next) => {
       forwardedHost, 
       host,
       redirectUri,
+      requestSource,
       source,
-      hasWebappOrigin,
-      hasWebappReferer,
-      hasWebappForwardedHost
+      hasWebappOrigin: origin.includes("taskforce-webapp") || origin.includes("railway.app"),
+      hasWebappReferer: referer.includes("taskforce-webapp") || referer.includes("railway.app"),
+      hasWebappForwardedHost: forwardedHost.includes("taskforce-webapp") || forwardedHost.includes("railway.app"),
+      hasOriginHeader: (origin || "").length > 0
     }, "OAuth start - source detection");
     
     const { state, expiresAt } = oauthStateStore.create({ 

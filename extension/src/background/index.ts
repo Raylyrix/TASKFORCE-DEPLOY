@@ -41,6 +41,7 @@ const handleAuthStart = async (payload?: AuthStartPayload) => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Request-Source": "extension", // Explicitly mark as extension request
     },
     body: JSON.stringify({ redirectUri }),
   });
