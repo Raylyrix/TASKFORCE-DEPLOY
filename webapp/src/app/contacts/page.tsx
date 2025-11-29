@@ -61,7 +61,7 @@ export default function ContactsPage() {
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
           </div>
-        ) : searchResults && searchResults.contacts.length > 0 ? (
+        ) : searchResults && searchResults.contacts && Array.isArray(searchResults.contacts) && searchResults.contacts.length > 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="divide-y divide-gray-200">
               {searchResults.contacts.map((contact) => (
