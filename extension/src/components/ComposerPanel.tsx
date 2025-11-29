@@ -1424,6 +1424,122 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
             placeholder="Write your opening, add personalization, and include call-to-actions."
           />
         </div>
+
+        {/* File Attachments */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: "14px" }}>Attachments</span>
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#5f6368" }}>
+              Add files to your email (max 25MB per file, 25MB total). Files are automatically scanned for viruses.
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <input
+              type="file"
+              id="attachment-input"
+              multiple
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || []);
+                const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+                const newAttachments: typeof attachments = [];
+
+                for (const file of files) {
+                  if (file.size > MAX_SIZE) {
+                    alert(`File "${file.name}" exceeds the 25MB limit. Please choose a smaller file.`);
+                    continue;
+                  }
+
+                  try {
+                    const base64 = await new Promise<string>((resolve, reject) => {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const result = reader.result as string;
+                        // Remove data URL prefix (e.g., "data:application/pdf;base64,")
+                        const base64Content = result.split(",")[1] || result;
+                        resolve(base64Content);
+                      };
+                      reader.onerror = reject;
+                      reader.readAsDataURL(file);
+                    });
+
+                    newAttachments.push({
+                      filename: file.name,
+                      content: base64,
+                      contentType: file.type || undefined,
+                      size: file.size,
+                    });
+                  } catch (error) {
+                    console.error("Failed to read file:", error);
+                    alert(`Failed to read file "${file.name}". Please try again.`);
+                  }
+                }
+
+                // Check total size
+                const totalSize = [...attachments, ...newAttachments].reduce((sum, att) => sum + (att.size || 0), 0);
+                if (totalSize > MAX_SIZE) {
+                  alert(`Total attachment size exceeds 25MB. Please remove some files.`);
+                  return;
+                }
+
+                updateComposerDraft({ attachments: [...attachments, ...newAttachments] });
+                // Reset input
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const input = document.getElementById("attachment-input") as HTMLInputElement;
+                input?.click();
+              }}
+              style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <Paperclip size={16} />
+              Add Files
+            </Button>
+            {attachments.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+                {attachments.map((att, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      backgroundColor: "#f8f9fa",
+                      borderRadius: "6px",
+                      border: "1px solid #dadce0",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                      <Paperclip size={14} color="#5f6368" />
+                      <span style={{ fontSize: "13px", color: "#202124", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {att.filename}
+                      </span>
+                      <span style={{ fontSize: "12px", color: "#5f6368" }}>
+                        ({(att.size || 0) / 1024 / 1024 < 1
+                          ? `${((att.size || 0) / 1024).toFixed(1)} KB`
+                          : `${((att.size || 0) / 1024 / 1024).toFixed(2)} MB`})
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        const newAttachments = attachments.filter((_, i) => i !== index);
+                        updateComposerDraft({ attachments: newAttachments });
+                      }}
+                      style={{ padding: "4px 8px", minWidth: "auto" }}
+                    >
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </Section>
     </>
   );
