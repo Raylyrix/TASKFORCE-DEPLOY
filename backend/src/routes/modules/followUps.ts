@@ -234,7 +234,21 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
     // Import required services
     const { gmailDeliveryService } = await import("../../services/gmailDelivery.js");
     const { googleAuthService } = await import("../../services/googleAuth.js");
-    const htmlToText = (await import("html-to-text")).htmlToText;
+    
+    // Simple HTML to text converter (inline to avoid dependency)
+    const htmlToText = (html: string): string => {
+      return html
+        .replace(/<style[^>]*>.*?<\/style>/gi, '')
+        .replace(/<script[^>]*>.*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+    };
 
     let threadId: string | null = null;
     let inReplyTo: string | null = null;
