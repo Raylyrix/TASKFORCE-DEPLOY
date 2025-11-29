@@ -25,7 +25,8 @@ export default defineConfig({
     "@tanstack/react-query",
     "zustand",
     "zod",
-    "date-fns"
+    "date-fns",
+    "lucide-react"
   ],
   define: {
     __DEV__: JSON.stringify(isDev),
