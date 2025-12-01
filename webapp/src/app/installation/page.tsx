@@ -30,13 +30,16 @@ export default function InstallationPage() {
             </div>
           </div>
           <a
-            href="/taskforce-extension.zip"
-            download="taskforce-extension.zip"
+            href="/taskforce-extension-v1.0.0.zip"
+            download="taskforce-extension-v1.0.0.zip"
             className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-700 font-semibold rounded-lg shadow-md hover:bg-blue-50 transition-colors"
           >
             <Download className="w-5 h-5" />
-            Download Extension (ZIP)
+            Download Extension v1.0.0 (ZIP)
           </a>
+          <p className="text-sm text-blue-100 mt-2">
+            Version 1.0.0 - Latest stable release
+          </p>
         </div>
 
         {/* Installation Steps */}
@@ -57,7 +60,7 @@ export default function InstallationPage() {
                     Download the Extension
                   </h3>
                   <p className="text-gray-700 dark:text-gray-300 mb-4">
-                    Click the download button above to get the <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">taskforce-extension.zip</code> file.
+                    Click the download button above to get the <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">taskforce-extension-v1.0.0.zip</code> file.
                   </p>
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                     <div className="flex items-start gap-2">

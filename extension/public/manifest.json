@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TaskForce Campaign Manager",
   "description": "Injects a custom Gmail composer to orchestrate bulk outreach campaigns with scheduling, follow-ups, and tracking.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "options_page": "options.html",
   "background": {
     "service_worker": "background/index.js",

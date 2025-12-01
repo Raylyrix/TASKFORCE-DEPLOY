@@ -436,8 +436,8 @@ function ExtensionDownloadSection() {
   const handleDownload = () => {
     // Create a temporary anchor element to trigger download
     const link = document.createElement("a");
-    link.href = "/taskforce-extension.zip";
-    link.download = "taskforce-extension.zip";
+    link.href = "/taskforce-extension-v1.0.0.zip";
+    link.download = "taskforce-extension-v1.0.0.zip";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -450,11 +450,14 @@ function ExtensionDownloadSection() {
           <Package className="w-6 h-6 text-blue-600" />
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Chrome Extension</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Chrome Extension v1.0.0</h3>
           <p className="text-sm text-gray-600 mb-4">
             Download the TaskForce Chrome extension to compose campaigns directly from Gmail. 
             The extension integrates seamlessly with your Gmail account and allows you to create 
             and manage email campaigns without leaving your inbox.
+          </p>
+          <p className="text-xs text-gray-500 mb-4">
+            <strong>Version 1.0.0</strong> - Includes follow-ups, replies, reminders, email selector, and all latest features.
           </p>
           <div className="flex items-center gap-3">
             <button
