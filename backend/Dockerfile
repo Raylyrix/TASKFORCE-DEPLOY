@@ -3,15 +3,24 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first (for better layer caching)
-COPY package*.json ./
+# Copy everything first (Railway may build from repo root or backend root)
+COPY . .
+
+# Handle both build contexts: repo root (backend/prisma) or backend root (prisma)
+# If prisma is in backend/, copy backend files to root
+RUN if [ -d ./backend/prisma ] && [ ! -d ./prisma ]; then \
+      echo "Detected repo root build context, copying backend files to root..." && \
+      cp -r ./backend/* ./ && \
+      cp -r ./backend/.* ./ 2>/dev/null || true; \
+    fi
+
+# Ensure package.json is in root for npm ci
+RUN if [ ! -f ./package.json ] && [ -f ./backend/package.json ]; then \
+      cp ./backend/package*.json ./; \
+    fi
 
 # Install dependencies
 RUN npm ci
-
-# Copy everything (including prisma, src, start.sh, etc.)
-# Railway builds from backend/ directory as root, so all files are relative to backend/
-COPY . .
 
 # Verify prisma directory exists
 RUN if [ ! -f ./prisma/schema.prisma ]; then \
