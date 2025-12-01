@@ -1401,25 +1401,82 @@ const listFollowUpSequences = async (campaignId: string) =>
     },
   });
 
-const listCampaignsForUser = async (userId: string) =>
-  prisma.campaign.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      recipients: {
-        select: {
-          id: true,
-          status: true,
+const listCampaignsForUser = async (userId: string) => {
+  try {
+    return await prisma.campaign.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        userId: true,
+        sheetSourceId: true,
+        name: true,
+        status: true,
+        sendStrategy: true,
+        trackingConfig: true,
+        folderId: true,
+        gmailLabelId: true,
+        createdAt: true,
+        updatedAt: true,
+        scheduledSendAt: true,
+        recipients: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        messages: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        folder: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            gmailLabelId: true,
+          },
         },
       },
-      messages: {
+    });
+  } catch (error: any) {
+    // If folderId column doesn't exist yet, query without it
+    if (error?.message?.includes("folderId") || error?.message?.includes("does not exist")) {
+      logger.warn({ userId, error: error.message }, "Campaign folder columns not yet migrated, querying without folder relation");
+      return await prisma.campaign.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
+          userId: true,
+          sheetSourceId: true,
+          name: true,
           status: true,
+          sendStrategy: true,
+          trackingConfig: true,
+          createdAt: true,
+          updatedAt: true,
+          scheduledSendAt: true,
+          recipients: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+          messages: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
         },
-      },
-    },
-  });
+      });
+    }
+    throw error;
+  }
+};
 
 const getCampaignSummary = async (campaignId: string) => {
   const campaign = await prisma.campaign.findUnique({
