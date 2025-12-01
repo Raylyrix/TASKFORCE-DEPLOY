@@ -6,6 +6,7 @@
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import { MessageStatus, CampaignStatus } from "@prisma/client";
+import { followUpQueue } from "../queue/followUpQueue";
 
 type RetentionConfig = {
   // Campaign data retention (days)
@@ -127,6 +128,7 @@ async function cleanupOldTrackingEvents(daysOld: number): Promise<number> {
 /**
  * Archive old completed campaigns
  * SAFETY: Only deletes campaigns with status COMPLETED, never RUNNING/SCHEDULED/PAUSED
+ * CRITICAL: Never deletes campaigns that have future scheduled follow-ups
  */
 async function archiveOldCompletedCampaigns(daysOld: number): Promise<number> {
   const cutoffDate = new Date();
@@ -154,12 +156,121 @@ async function archiveOldCompletedCampaigns(daysOld: number): Promise<number> {
   }
 
   const campaignIds = oldCampaigns.map((c) => c.id);
+  const now = new Date();
+  const safeToDelete: string[] = [];
+
+  // CRITICAL SAFETY CHECK: Verify no future scheduled follow-ups exist
+  // Check each campaign for pending follow-up jobs in BullMQ
+  for (const campaignId of campaignIds) {
+    try {
+      // Get all follow-up sequences for this campaign
+      const sequences = await prisma.followUpSequence.findMany({
+        where: { campaignId },
+        include: {
+          steps: true,
+        },
+      });
+
+      // Check if any follow-up steps have scheduledAt dates in the future
+      let hasFutureFollowUps = false;
+      
+      for (const sequence of sequences) {
+        for (const step of sequence.steps) {
+          const offsetConfig = step.offsetConfig as { 
+            scheduledAt?: string | null; 
+            delayMs?: number | null;
+          } | null;
+          
+          if (offsetConfig?.scheduledAt) {
+            const scheduledAt = new Date(offsetConfig.scheduledAt);
+            if (scheduledAt > now) {
+              hasFutureFollowUps = true;
+              break;
+            }
+          }
+        }
+        if (hasFutureFollowUps) break;
+      }
+
+      // Also check BullMQ for pending jobs (this is the most reliable check)
+      if (!hasFutureFollowUps) {
+        try {
+          const sequenceIds = sequences.map(s => s.id);
+          
+          // Get all pending jobs (delayed, waiting, active)
+          const pendingJobs = await followUpQueue.getJobs(['delayed', 'waiting', 'active']);
+          
+          const hasPendingJobs = pendingJobs.some((job) => {
+            const jobData = job.data as { followUpSequenceId?: string; scheduledAt?: string };
+            
+            // Check if this job belongs to any sequence in this campaign
+            if (jobData.followUpSequenceId && sequenceIds.includes(jobData.followUpSequenceId)) {
+              // Check if job has a future scheduled time
+              if (jobData.scheduledAt) {
+                const scheduledAt = new Date(jobData.scheduledAt);
+                if (scheduledAt > now) {
+                  return true;
+                }
+              }
+              
+              // If job is delayed or waiting, it's scheduled for the future
+              // Check the job's timestamp (when it will execute)
+              const jobTimestamp = job.timestamp || 0;
+              if (jobTimestamp > now.getTime()) {
+                return true;
+              }
+              
+              // For delayed jobs, the delay option means it will execute in the future
+              if (job.opts?.delay && job.opts.delay > 0) {
+                return true;
+              }
+            }
+            return false;
+          });
+          
+          if (hasPendingJobs) {
+            hasFutureFollowUps = true;
+          }
+        } catch (error) {
+          logger.warn(
+            { campaignId, error },
+            "Error checking BullMQ for pending follow-up jobs, skipping deletion for safety"
+          );
+          // On error checking BullMQ, skip deletion to be safe
+          hasFutureFollowUps = true;
+        }
+      }
+
+      if (!hasFutureFollowUps) {
+        safeToDelete.push(campaignId);
+      } else {
+        logger.info(
+          { campaignId, reason: "Has future scheduled follow-ups" },
+          "Skipping campaign deletion - has future scheduled follow-ups"
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { campaignId, error },
+        "Error checking for future follow-ups, skipping campaign deletion for safety"
+      );
+      // On error, skip deletion to be safe
+    }
+  }
+
+  if (safeToDelete.length === 0) {
+    logger.info(
+      { totalCampaigns: campaignIds.length, skipped: campaignIds.length },
+      "No campaigns safe to delete - all have future scheduled follow-ups"
+    );
+    return 0;
+  }
 
   // Delete recipients (cascade will handle messages)
   await prisma.campaignRecipient.deleteMany({
     where: {
       campaignId: {
-        in: campaignIds,
+        in: safeToDelete,
       },
     },
   });
@@ -168,7 +279,7 @@ async function archiveOldCompletedCampaigns(daysOld: number): Promise<number> {
   await prisma.followUpSequence.deleteMany({
     where: {
       campaignId: {
-        in: campaignIds,
+        in: safeToDelete,
       },
     },
   });
@@ -177,12 +288,21 @@ async function archiveOldCompletedCampaigns(daysOld: number): Promise<number> {
   const deleted = await prisma.campaign.deleteMany({
     where: {
       id: {
-        in: campaignIds,
+        in: safeToDelete,
       },
     },
   });
 
-  logger.info({ count: deleted.count, daysOld }, "Archived old completed campaigns");
+  logger.info(
+    { 
+      count: deleted.count, 
+      daysOld,
+      totalChecked: campaignIds.length,
+      skipped: campaignIds.length - safeToDelete.length,
+      reason: "Had future scheduled follow-ups"
+    }, 
+    "Archived old completed campaigns"
+  );
   return deleted.count;
 }
 
