@@ -287,6 +287,61 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
     }
   }, [instanceId, resetComposerDraft]);
 
+  // Check for selected emails from Gmail and populate composer
+  const hasLoadedSelectedEmails = useRef(false);
+  useEffect(() => {
+    if (hasLoadedSelectedEmails.current) return;
+    hasLoadedSelectedEmails.current = true;
+
+    try {
+      const selectedEmailsJson = typeof window !== "undefined" && 
+        window.sessionStorage.getItem("taskforce-selected-emails");
+      
+      if (selectedEmailsJson) {
+        const selectedEmails = JSON.parse(selectedEmailsJson) as Array<{
+          email: string;
+          name: string;
+          subject: string;
+        }>;
+
+        if (selectedEmails.length > 0) {
+          // Convert selected emails to import result format
+          const headers = ["email", "name", "subject"];
+          const records = selectedEmails.map((email) => ({
+            email: email.email,
+            name: email.name || email.email.split("@")[0],
+            subject: email.subject || "",
+          }));
+
+          const importResult: SheetImportResult = {
+            sheetSource: {
+              id: `gmail-selected-${Date.now()}`,
+              title: `Selected from Gmail (${selectedEmails.length} emails)`,
+              spreadsheetId: `gmail-selected-${Date.now()}`,
+              worksheetId: null,
+              columns: headers.map((h, i) => ({ name: h, index: i })),
+            },
+            headers,
+            records,
+            importedAt: new Date().toISOString(),
+          };
+
+          // Update composer with selected emails
+          updateComposerDraft({
+            importResult,
+            emailField: "email",
+            campaignName: `Campaign from Gmail (${selectedEmails.length} recipients)`,
+          });
+
+          // Clear the selected emails from sessionStorage
+          window.sessionStorage.removeItem("taskforce-selected-emails");
+        }
+      }
+    } catch (error) {
+      console.error("[TaskForce] Error loading selected emails:", error);
+    }
+  }, [updateComposerDraft]);
+
   const {
     campaignName,
     sheetUrl,
@@ -398,13 +453,17 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
         throw new Error("Select the column that contains recipient email addresses.");
       }
 
+      // For Gmail-selected emails, we don't have a sheetSourceId
+      // So we'll pass undefined for sheetSourceId when it's from Gmail
+      const isGmailSelected = importResult.sheetSource.id.startsWith("gmail-selected");
+      
       const campaignResponse = await apiClient.request<{ campaign: { id: string } }>(
         "/api/campaigns",
         {
           method: "POST",
           body: JSON.stringify({
             name: campaignName,
-            sheetSourceId: importResult.sheetSource.id,
+            ...(isGmailSelected ? {} : { sheetSourceId: importResult.sheetSource.id }),
             recipients: {
               emailField,
               rows: importResult.records,

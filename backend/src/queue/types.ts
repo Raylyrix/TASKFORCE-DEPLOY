@@ -7,6 +7,7 @@ export enum QueueName {
   ScheduledEmail = "scheduled-email",
   SnoozeRestore = "snooze-restore",
   CalendarConnectionSetup = "calendar-connection-setup",
+  DataRetention = "data-retention",
 }
 
 export type CampaignDispatchJob = {
@@ -70,5 +71,21 @@ export type CalendarConnectionSetupJob = {
   scope: string;
   tokenType: string;
   expiryDate: string; // ISO string
+};
+
+export type DataRetentionJob = {
+  config?: {
+    completedCampaigns?: number;
+    draftCampaigns?: number;
+    sentMessages?: number;
+    failedMessages?: number;
+    trackingEvents?: number;
+    calendarCache?: number;
+    emailDrafts?: number;
+    oldBookings?: number;
+    bounceRecords?: number;
+    complaintRecords?: number;
+  };
+  limitMB?: number;
 };
 

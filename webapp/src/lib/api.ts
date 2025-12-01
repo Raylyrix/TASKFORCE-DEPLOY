@@ -102,7 +102,98 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 }
 
+type AdminMetrics = {
+  overview: {
+    totalUsers: number;
+    totalCampaigns: number;
+    totalRecipients: number;
+    totalMessages: number;
+    totalTrackingEvents: number;
+    activeCampaigns: number;
+    databaseSizeMB: number;
+    totalRows: number;
+  };
+  campaignStatus: {
+    running: number;
+    scheduled: number;
+    paused: number;
+    completed: number;
+    active: number;
+  };
+  messageStatus: Record<string, number>;
+  recipientStatus: Record<string, number>;
+  trackingEvents: Record<string, number>;
+  recentActivity: {
+    messagesLast24h: number;
+    trackingEventsLast24h: number;
+    campaignsCreatedLast24h: number;
+  };
+  topUsers: Array<{
+    id: string;
+    email: string;
+    displayName: string | null;
+    campaignCount: number;
+  }>;
+  charts: {
+    dailyCampaigns: Array<{ date: string; count: number }>;
+    dailyMessages: Array<{ date: string; count: number }>;
+    dailyTrackingEvents: Array<{ date: string; count: number }>;
+  };
+  databaseBreakdown: Record<string, { rows: number; sizeMB: number }>;
+};
+
 export const api = {
+  admin: {
+    getMetrics: () => apiRequest<AdminMetrics>("/api/admin/metrics"),
+    deleteData: (config: Record<string, number>) =>
+      apiRequest<{
+        success: boolean;
+        result: {
+          deleted: Record<string, number>;
+          totalDeleted: number;
+          sizeBefore: number;
+          sizeAfter: number;
+        };
+        safetyCheck: {
+          activeCampaignsBefore: number;
+          activeCampaignsAfter: number;
+          verified: boolean;
+        };
+      }>("/api/admin/delete-data", {
+        method: "POST",
+        body: config,
+      }),
+    checkIsAdmin: () => apiRequest<{ isAdmin: boolean; email: string }>("/api/admin/is-admin"),
+    getDatabaseSize: () =>
+      apiRequest<{
+        totalRows: number;
+        estimatedSizeMB: number;
+        breakdown: Record<string, { rows: number; sizeMB: number }>;
+        status: {
+          currentSizeMB: number;
+          limitMB: number;
+          percentageUsed: number;
+          needsCleanup: boolean;
+        };
+      }>("/api/admin/database-size"),
+    getActiveCampaigns: () =>
+      apiRequest<{
+        activeCampaigns: Array<{
+          id: string;
+          name: string;
+          status: string;
+          userId: string;
+          createdAt: string;
+          updatedAt: string;
+          scheduledSendAt: string | null;
+          _count: {
+            recipients: number;
+            messages: number;
+          };
+        }>;
+        count: number;
+      }>("/api/admin/active-campaigns"),
+  },
   // Auth
   auth: {
     startGoogleAuth: (redirectUri?: string) =>

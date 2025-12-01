@@ -31,6 +31,8 @@ model User {
   assignmentsCreated  EmailAssignment[]    @relation("AssignmentCreator")
   ownedTeams          Team[]               @relation("TeamOwner")
   workflows           Workflow[]
+  sendingDomains      SendingDomain[]
+  campaignFolders     CampaignFolder[]
 
   @@index([email])
   @@index([createdAt])
@@ -215,21 +217,42 @@ model Campaign {
   status          CampaignStatus @default(DRAFT)
   sendStrategy    Json
   trackingConfig  Json
+  folderId        String?         // Folder/label for organizing campaigns
+  gmailLabelId    String?         // Gmail label ID for auto-labeling sent emails
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   scheduledSendAt DateTime?
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sheetSource SheetSource?        @relation(fields: [sheetSourceId], references: [id])
-  recipients  CampaignRecipient[]
-  followUps   FollowUpSequence[]
-  messages    MessageLog[]
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sheetSource  SheetSource?        @relation(fields: [sheetSourceId], references: [id])
+  folder       CampaignFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  recipients   CampaignRecipient[]
+  followUps    FollowUpSequence[]
+  messages     MessageLog[]
+  unsubscribes UnsubscribeRecord[]
 
   @@index([userId])
   @@index([userId, status])
   @@index([status])
   @@index([scheduledSendAt])
   @@index([userId, createdAt])
+  @@index([folderId])
+}
+
+model CampaignFolder {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  color       String?    // Optional color for the folder
+  gmailLabelId String?   // Gmail label ID if synced with Gmail
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@index([userId])
+  @@index([userId, name])
 }
 
 model CampaignRecipient {
@@ -297,6 +320,8 @@ model MessageLog {
   recipient      CampaignRecipient? @relation(fields: [campaignRecipientId], references: [id])
   followUpStep   FollowUpStep?      @relation(fields: [followUpStepId], references: [id])
   trackingEvents TrackingEvent[]
+  bounces        EmailBounce[]
+  complaints     EmailComplaint[]
 
   @@index([campaignId])
   @@index([campaignId, status])
@@ -355,6 +380,8 @@ enum RecipientStatus {
   SENT
   FAILED
   SUPPRESSED
+  UNSUBSCRIBED
+  BOUNCED
 }
 
 enum MessageStatus {
@@ -641,4 +668,149 @@ enum WorkflowExecutionStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+// Email Deliverability Models
+
+model SendingDomain {
+  id             String    @id @default(cuid())
+  userId         String
+  domain         String
+  spfRecord      String?
+  spfVerified    Boolean   @default(false)
+  dkimSelector   String?
+  dkimPublicKey  String?
+  dkimPrivateKey String?
+  dkimVerified   Boolean   @default(false)
+  dmarcPolicy    String? // e.g., "v=DMARC1; p=none; rua=mailto:dmarc@domain.com"
+  dmarcVerified  Boolean   @default(false)
+  isVerified     Boolean   @default(false)
+  verificationAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reputation   DomainReputation?
+  bounces      EmailBounce[]
+  complaints   EmailComplaint[]
+  warmups      EmailWarmup[]
+  unsubscribes UnsubscribeRecord[]
+
+  @@unique([userId, domain])
+  @@index([userId])
+  @@index([domain])
+  @@index([isVerified])
+}
+
+model DomainReputation {
+  id               String    @id @default(cuid())
+  sendingDomainId  String    @unique
+  bounceRate       Float     @default(0.0) // Percentage
+  complaintRate    Float     @default(0.0) // Percentage
+  openRate         Float     @default(0.0) // Percentage
+  clickRate        Float     @default(0.0) // Percentage
+  totalSent        Int       @default(0)
+  totalDelivered   Int       @default(0)
+  totalBounced     Int       @default(0)
+  totalComplained  Int       @default(0)
+  totalOpened      Int       @default(0)
+  totalClicked     Int       @default(0)
+  reputationScore  Float     @default(100.0) // 0-100 scale
+  isInWarmup       Boolean   @default(false)
+  warmupStartedAt  DateTime?
+  lastCalculatedAt DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sendingDomain SendingDomain @relation(fields: [sendingDomainId], references: [id], onDelete: Cascade)
+
+  @@index([reputationScore])
+  @@index([isInWarmup])
+}
+
+model EmailBounce {
+  id              String         @id @default(cuid())
+  sendingDomainId String?
+  messageLogId    String?
+  recipientEmail  String
+  bounceType      BounceType
+  bounceCategory  BounceCategory
+  reason          String?
+  rawResponse     String?
+  createdAt       DateTime       @default(now())
+
+  sendingDomain SendingDomain? @relation(fields: [sendingDomainId], references: [id], onDelete: SetNull)
+  messageLog    MessageLog?    @relation(fields: [messageLogId], references: [id], onDelete: SetNull)
+
+  @@index([sendingDomainId])
+  @@index([recipientEmail])
+  @@index([bounceType])
+  @@index([createdAt])
+}
+
+model EmailComplaint {
+  id              String   @id @default(cuid())
+  sendingDomainId String?
+  messageLogId    String?
+  recipientEmail  String
+  feedbackType    String? // e.g., "abuse", "fraud"
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  sendingDomain SendingDomain? @relation(fields: [sendingDomainId], references: [id], onDelete: SetNull)
+  messageLog    MessageLog?    @relation(fields: [messageLogId], references: [id], onDelete: SetNull)
+
+  @@index([sendingDomainId])
+  @@index([recipientEmail])
+  @@index([createdAt])
+}
+
+model UnsubscribeRecord {
+  id              String   @id @default(cuid())
+  email           String
+  campaignId      String?
+  sendingDomainId String?
+  reason          String?
+  source          String? // "link", "header", "manual"
+  createdAt       DateTime @default(now())
+
+  campaign      Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  sendingDomain SendingDomain? @relation(fields: [sendingDomainId], references: [id], onDelete: SetNull)
+
+  @@unique([email, campaignId])
+  @@index([email])
+  @@index([campaignId])
+  @@index([sendingDomainId])
+  @@index([createdAt])
+}
+
+model EmailWarmup {
+  id              String    @id @default(cuid())
+  sendingDomainId String
+  day             Int // Day number in warmup (1, 2, 3, ...)
+  targetVolume    Int // Target emails for this day
+  actualVolume    Int       @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sendingDomain SendingDomain @relation(fields: [sendingDomainId], references: [id], onDelete: Cascade)
+
+  @@unique([sendingDomainId, day])
+  @@index([sendingDomainId])
+  @@index([completedAt])
+}
+
+enum BounceType {
+  HARD
+  SOFT
+}
+
+enum BounceCategory {
+  INVALID_EMAIL
+  MAILBOX_FULL
+  MESSAGE_TOO_LARGE
+  CONTENT_REJECTED
+  BLOCKED
+  OTHER
 }

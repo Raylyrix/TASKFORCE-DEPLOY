@@ -8,6 +8,7 @@ import { registerCalendarSyncWorker } from "./calendarSyncQueue";
 import { registerScheduledEmailWorker } from "./scheduledEmailQueue";
 import { registerSnoozeRestoreWorker } from "./snoozeQueue";
 import { registerCalendarConnectionSetupWorker } from "./calendarConnectionSetupQueue";
+import { registerDataRetentionWorker, dataRetentionQueue, scheduleDailyCleanup } from "./dataRetentionQueue";
 import { campaignQueue } from "./campaignQueue";
 import { followUpQueue } from "./followUpQueue";
 import { trackingQueue } from "./trackingQueue";
@@ -33,6 +34,10 @@ export const initializeQueues = () => {
   workers.push(registerScheduledEmailWorker());
   workers.push(registerSnoozeRestoreWorker());
   workers.push(registerCalendarConnectionSetupWorker());
+  workers.push(registerDataRetentionWorker());
+
+  // Schedule daily cleanup
+  void scheduleDailyCleanup();
 
   initialized = true;
 };
@@ -51,6 +56,7 @@ export const closeQueues = async () => {
     scheduledEmailQueue.close(),
     snoozeQueue.close(),
     calendarConnectionSetupQueue.close(),
+    dataRetentionQueue.close(),
   ]);
 };
 

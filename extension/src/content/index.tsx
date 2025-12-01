@@ -389,10 +389,85 @@ const findManagedWindow = (instanceId: string) =>
 const isConfigVisible = (configId: string) =>
   Object.values(windowState).some((entry) => entry.configId === configId && entry.visible);
 
+// Check if sidebar is in collapsed/icon-only mode
+const isSidebarCollapsed = (): boolean => {
+  const nav = document.querySelector('div[role="navigation"]');
+  if (!nav) return false;
+  const navWidth = nav.getBoundingClientRect().width;
+  // Gmail typically collapses sidebar to ~72px when in icon-only mode
+  return navWidth < 100;
+};
+
 const updateButtonState = (configId: string) => {
   const button = sidebarButtons[configId];
   if (!button) return;
-  button.style.backgroundColor = isConfigVisible(configId) ? "#e8f0fe" : "transparent";
+  const isVisible = isConfigVisible(configId);
+  const isCollapsed = isSidebarCollapsed();
+  
+  if (isCollapsed) {
+    // Icon-only mode: Rectangular with rounded corners
+    button.style.backgroundColor = isVisible ? "#e5e5e7" : "#f5f5f7";
+    button.style.color = "#1d1d1f";
+    button.style.padding = "8px";
+    button.style.justifyContent = "center";
+    button.style.alignItems = "center";
+    button.style.minWidth = "36px";
+    button.style.width = "36px";
+    button.style.height = "36px";
+    button.style.borderRadius = "8px";
+    button.style.transform = "scale(1)";
+    button.style.boxShadow = "none";
+    button.style.border = "none";
+    // Hide text span
+    const textSpan = button.querySelector(".taskforce-button-text");
+    if (textSpan) {
+      (textSpan as HTMLElement).style.display = "none";
+    }
+    // Style icon for collapsed mode - consistent 20px size
+    const icon = button.querySelector("span:not(.taskforce-button-text)");
+    if (icon) {
+      (icon as HTMLElement).style.display = "flex";
+      (icon as HTMLElement).style.fontSize = "17px";
+      (icon as HTMLElement).style.color = "#6e6e73";
+      (icon as HTMLElement).style.width = "20px";
+      (icon as HTMLElement).style.height = "20px";
+      (icon as HTMLElement).style.lineHeight = "1";
+    }
+  } else {
+    // Full mode: Rectangular with rounded corners
+    button.style.backgroundColor = isVisible ? "#e5e5e7" : "transparent";
+    button.style.color = "#1d1d1f";
+    button.style.padding = "6px 10px";
+    button.style.justifyContent = "flex-start";
+    button.style.alignItems = "center";
+    button.style.minWidth = "0";
+    button.style.width = "100%";
+    button.style.height = "32px";
+    button.style.borderRadius = "8px";
+    button.style.transform = "scale(1)";
+    button.style.boxShadow = "none";
+    button.style.border = "none";
+    // Show text span
+    const textSpan = button.querySelector(".taskforce-button-text");
+    if (textSpan) {
+      (textSpan as HTMLElement).style.display = "block";
+      (textSpan as HTMLElement).style.color = "#1d1d1f";
+      (textSpan as HTMLElement).style.fontWeight = isVisible ? "500" : "400";
+      (textSpan as HTMLElement).style.fontSize = "13px";
+    }
+    // Style icon for full mode - consistent 20px size
+    const icon = button.querySelector("span:not(.taskforce-button-text)");
+    if (icon) {
+      (icon as HTMLElement).style.display = "flex";
+      (icon as HTMLElement).style.fontSize = "17px";
+      (icon as HTMLElement).style.color = isVisible ? "#6e6e73" : "#8e8e93";
+      (icon as HTMLElement).style.width = "20px";
+      (icon as HTMLElement).style.height = "20px";
+      (icon as HTMLElement).style.lineHeight = "1";
+    }
+  }
+  
+  button.style.fontWeight = isVisible ? "500" : "400";
 };
 
 const updateWindowStateSnapshot = (instanceId: string, overrides: Partial<StoredWindowState> = {}) => {
@@ -648,7 +723,7 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   
   // If this is a new composer (spawned via plus button), mark it as fresh
   // Store the instanceId in sessionStorage so the component can detect it's fresh
-  const isFresh = isNewComposer && config.id === FLOATING_COMPOSER_ID;
+  const isFresh: boolean = Boolean(isNewComposer && config.id === FLOATING_COMPOSER_ID);
   if (isFresh) {
     try {
       // Store the fresh instanceId so the component can identify itself
@@ -662,7 +737,7 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
   setWindowVisibility(instanceId, true);
 };
 
-const createWindowInstance = (config: WindowConfig, state: StoredWindowState, isFresh?: boolean) => {
+const createWindowInstance = (config: WindowConfig, state: StoredWindowState, isFresh: boolean = false) => {
   const existing = document.getElementById(state.instanceId) as HTMLDivElement | null;
   if (existing) {
     existing.remove();
@@ -1030,57 +1105,107 @@ const ensureSidebarButtons = () => {
     const wrapper = document.createElement("div");
     wrapper.id = wrapperId;
     Object.assign(wrapper.style, {
-      margin: "12px 0",
-      padding: "0 8px",
+      margin: "8px 0",
+      padding: "0 4px",
       display: "flex",
       flexDirection: "column",
-      gap: "6px",
+      gap: "4px",
     });
 
     const row = document.createElement("div");
     Object.assign(row.style, {
       display: "flex",
-      gap: "6px",
+      gap: "4px",
       alignItems: "center",
+      width: "100%",
     });
 
     const button = document.createElement("button");
     button.id = `${config.id}-sidebar-button`;
     button.type = "button";
-    button.textContent = config.sidebarLabel;
     button.setAttribute("aria-label", config.sidebarLabel);
+    
+    // Create icon span
+    const icon = document.createElement("span");
+    icon.textContent = config.sidebarIcon ?? "⚙️";
+    icon.setAttribute("aria-hidden", "true");
+    icon.style.fontSize = "17px";
+    icon.style.display = "flex";
+    icon.style.alignItems = "center";
+    icon.style.justifyContent = "center";
+    icon.style.width = "20px";
+    icon.style.height = "20px";
+    icon.style.flexShrink = "0";
+    icon.style.color = "#8e8e93";
+    icon.style.lineHeight = "1";
+    button.appendChild(icon);
+    
+    // Create text span for label (can be hidden when collapsed)
+    const textSpan = document.createElement("span");
+    textSpan.textContent = config.sidebarLabel;
+    textSpan.className = "taskforce-button-text";
+    textSpan.style.flex = "1";
+    textSpan.style.minWidth = "0";
+    textSpan.style.overflow = "hidden";
+    textSpan.style.textOverflow = "ellipsis";
+    textSpan.style.whiteSpace = "nowrap";
+    button.appendChild(textSpan);
     Object.assign(button.style, {
       flex: "1",
       border: "none",
       background: "transparent",
-      padding: "10px 12px",
-      borderRadius: "16px",
+      padding: "6px 10px",
+      borderRadius: "8px",
       textAlign: "left",
-      fontSize: "14px",
+      fontSize: "13px",
       cursor: "pointer",
-      color: "#1f1f1f",
+      color: "#1d1d1f",
       display: "flex",
       alignItems: "center",
       gap: "10px",
-      transition: "background-color 0.2s ease",
+      transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+      fontWeight: "400",
+      minWidth: "0",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      width: "100%",
+      maxWidth: "100%",
+      position: "relative",
+      outline: "none",
+      height: "32px",
     });
 
     button.addEventListener("mouseenter", () => {
-      button.style.backgroundColor = "#e8f0fe";
+      const isCollapsed = isSidebarCollapsed();
+      if (isCollapsed) {
+        button.style.backgroundColor = "#d1d1d6";
+        button.style.transform = "scale(1)";
+      } else {
+        button.style.backgroundColor = "#e5e5e7";
+        button.style.color = "#1d1d1f";
+        const icon = button.querySelector("span:not(.taskforce-button-text)");
+        if (icon) {
+          (icon as HTMLElement).style.color = "#6e6e73";
+        }
+      }
     });
     button.addEventListener("mouseleave", () => {
       updateButtonState(config.id);
+    });
+    
+    button.addEventListener("focus", () => {
+      button.style.outline = "2px solid #1a73e8";
+      button.style.outlineOffset = "2px";
+    });
+    
+    button.addEventListener("blur", () => {
+      button.style.outline = "none";
     });
 
     button.addEventListener("click", () => {
       toggleWindowVisibility(config.id);
     });
-
-    const icon = document.createElement("span");
-    icon.textContent = config.sidebarIcon ?? "⚙️";
-    icon.setAttribute("aria-hidden", "true");
-    icon.style.fontSize = "16px";
-    button.prepend(icon);
 
     row.appendChild(button);
     sidebarButtons[config.id] = button;
@@ -1145,15 +1270,43 @@ const init = () => {
       });
     });
 
+    // Initialize Gmail email selector
+    import("./gmailEmailSelector").then(({ initGmailEmailSelector }) => {
+      initGmailEmailSelector().catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes("Extension context invalidated") || 
+            errorMessage.includes("message port closed")) {
+          console.warn("[TaskForce] Extension context invalidated, email selector will resume after page reload");
+        } else {
+          console.error("[TaskForce] Error initializing Gmail email selector:", error);
+        }
+      });
+    });
+
     const observer = new MutationObserver(() => {
       try {
         ensureSidebarButtons();
+        // Update button states when DOM changes (sidebar might have resized)
+        Object.keys(sidebarButtons).forEach((configId) => {
+          updateButtonState(configId);
+        });
       } catch (error) {
         console.error("[TaskForce] Error in sidebar button observer:", error);
       }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+    
+    // Watch for sidebar resize events
+    const nav = document.querySelector('div[role="navigation"]');
+    if (nav) {
+      const resizeObserver = new ResizeObserver(() => {
+        Object.keys(sidebarButtons).forEach((configId) => {
+          updateButtonState(configId);
+        });
+      });
+      resizeObserver.observe(nav);
+    }
 
     // Global mouse event handlers for drag and resize
     window.addEventListener("mousemove", (event) => {

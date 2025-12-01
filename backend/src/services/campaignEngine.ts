@@ -119,13 +119,23 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
   // Clean the template - remove any non-printable characters except newlines and tabs
   const cleanedTemplate = template.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "");
   
-  return cleanedTemplate.replace(/{{\s*([\w.-]+)\s*}}/g, (_, key: string) => {
+  // Log available data keys for debugging
+  const availableKeys = Object.keys(data || {});
+  if (availableKeys.length === 0) {
+    logger.warn({ template: cleanedTemplate.substring(0, 100) }, "No data available for template rendering");
+  }
+  
+  return cleanedTemplate.replace(/{{\s*([\w.-]+)\s*}}/g, (match, key: string) => {
     const value = data[key];
-    // Only use the value if it's a valid string, otherwise use empty string
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
+    // Log missing variables for debugging
+    if (value === undefined || value === null) {
+      logger.debug({ key, availableKeys, match }, "Template variable not found in data");
     }
-    return "";
+    // Return the value if it exists, otherwise return empty string (not the original placeholder)
+    if (value !== undefined && value !== null) {
+      return String(value).trim();
+    }
+    return ""; // Return empty string instead of the placeholder
   });
 };
 
@@ -200,8 +210,9 @@ const createMessageForRecipient = (
     );
   }
 
-  // Add tracking pixel for opens
-  if (tracking?.trackingPixelUrl) {
+  // Add tracking pixel for opens ONLY if tracking is explicitly enabled
+  // This prevents tracking pixels from being added when user disables tracking
+  if (strategy.trackOpens === true && tracking?.trackingPixelUrl) {
     html = `${html}<img src="${tracking.trackingPixelUrl}" alt="" width="1" height="1" style="display:none;" />`;
   }
 
@@ -480,7 +491,18 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
   const recipient = await prisma.campaignRecipient.findUnique({
     where: { id: job.recipientId },
     include: {
-      campaign: true,
+      campaign: {
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          status: true,
+          sendStrategy: true,
+          trackingConfig: true,
+          gmailLabelId: true,
+          folderId: true,
+        },
+      },
     },
   });
 
@@ -542,19 +564,24 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     },
   });
 
-  const trackingPixelUrl = sanitizedStrategy.trackOpens
+  // Only create tracking URLs if tracking is explicitly enabled
+  // This ensures tracking is completely disabled when user turns it off
+  const trackingPixelUrl = sanitizedStrategy.trackOpens === true
     ? `${AppConfig.publicUrl}/api/tracking/pixel/${messageLog.id}`
     : undefined;
 
-  const clickTrackingBaseUrl = sanitizedStrategy.trackClicks
+  const clickTrackingBaseUrl = sanitizedStrategy.trackClicks === true
     ? `${AppConfig.publicUrl}/api/tracking/click`
     : undefined;
 
-  const messageContent = createMessageForRecipient(sanitizedStrategy, payload, {
+  // Only pass tracking if at least one tracking method is enabled
+  const tracking = (trackingPixelUrl || clickTrackingBaseUrl) ? {
     trackingPixelUrl,
     clickTrackingBaseUrl,
     messageLogId: messageLog.id,
-  });
+  } : undefined;
+
+  const messageContent = createMessageForRecipient(sanitizedStrategy, payload, tracking);
 
   // Final validation of rendered subject
   const finalSubject = messageContent.subject.trim();
@@ -605,6 +632,12 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     "Sending campaign email",
   );
 
+  // Get label ID from campaign folder if set
+  const labelIds: string[] = [];
+  if (recipient.campaign.gmailLabelId) {
+    labelIds.push(recipient.campaign.gmailLabelId);
+  }
+
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: recipient.campaign.userId,
     to: recipient.email,
@@ -618,6 +651,7 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
       contentType: att.contentType || undefined,
       size: att.size || undefined,
     })),
+    labelIds: labelIds.length > 0 ? labelIds : undefined,
   });
 
   await prisma.messageLog.update({
@@ -815,6 +849,18 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
           createdAt: "desc",
         },
         take: 1,
+      },
+      campaign: {
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          status: true,
+          sendStrategy: true,
+          trackingConfig: true,
+          gmailLabelId: true,
+          folderId: true,
+        },
       },
     },
   });
@@ -1045,6 +1091,19 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
 
   const payload = recipient.payload as RecipientRecord;
 
+  // Log payload for debugging variable replacement
+  logger.debug(
+    { 
+      recipientId: recipient.id, 
+      followUpStepId: step.id,
+      payloadKeys: Object.keys(payload || {}),
+      subjectTemplate: step.templateSubject,
+      hasName: 'name' in (payload || {}),
+      nameValue: payload?.name,
+    },
+    "Rendering follow-up template with payload"
+  );
+
   const subjectTemplate = step.templateSubject?.length ? step.templateSubject : "Checking in";
 
   const messageLog = await prisma.messageLog.create({
@@ -1070,6 +1129,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       },
     },
     payload,
+    undefined, // No tracking for follow-ups
   );
 
   // Validate reply setup: if sendAsReply is true, we must have threadId and inReplyTo
@@ -1106,6 +1166,12 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
   const stepOffsetConfig = step.offsetConfig as { delayMs?: number; sendAsReply?: boolean; parentStepId?: string; isNested?: boolean; attachments?: Attachment[] } | null;
   const stepAttachments = (stepOffsetConfig?.attachments || []) as Attachment[];
 
+  // Get label ID from campaign folder if set
+  const labelIds: string[] = [];
+  if (step.sequence.campaign.gmailLabelId) {
+    labelIds.push(step.sequence.campaign.gmailLabelId);
+  }
+
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: step.sequence.campaign.userId,
     to: recipient.email,
@@ -1122,6 +1188,7 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
       contentType: att.contentType || undefined,
       size: att.size || undefined,
     })),
+    labelIds: labelIds.length > 0 ? labelIds : undefined,
   });
 
   if (canSendAsReply) {

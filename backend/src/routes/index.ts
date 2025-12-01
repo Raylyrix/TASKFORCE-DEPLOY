@@ -15,6 +15,10 @@ import { teamsRouter } from "./modules/teams";
 import { emailAssignmentsRouter } from "./modules/emailAssignments";
 import { customerViewRouter } from "./modules/customerView";
 import { workflowsRouter } from "./modules/workflows";
+import domainsRouter from "./modules/domains";
+import campaignFoldersRouter from "./modules/campaignFolders";
+import { dataRetentionRouter } from "./modules/dataRetention";
+import { adminRouter } from "./modules/admin";
 
 export const router = Router();
 
@@ -33,3 +37,7 @@ router.use("/teams", teamsRouter);
 router.use("/email-assignments", emailAssignmentsRouter);
 router.use("/customer-view", customerViewRouter);
 router.use("/workflows", workflowsRouter);
+router.use("/domains", domainsRouter);
+router.use("/campaign-folders", campaignFoldersRouter);
+router.use("/data-retention", dataRetentionRouter);
+router.use("/admin", adminRouter);

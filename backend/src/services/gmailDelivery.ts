@@ -5,6 +5,10 @@ import { AppConfig } from "../config/env";
 import { googleAuthService } from "./googleAuth";
 import { logger } from "../lib/logger";
 import { antiSpamService } from "./antiSpamService";
+import { recordBounce, parseBounceFromError, shouldSuppressEmail } from "./bounceService";
+import { recordEmailSent, recordEmailDelivered, recordComplaint } from "./reputationService";
+import { canSendEmail } from "./warmupService";
+import { getOrCreateSendingDomain } from "./domainAuthService";
 
 export type Attachment = {
   filename: string;
@@ -27,6 +31,7 @@ type SendEmailInput = {
   inReplyTo?: string | null; // Message-ID of the message being replied to
   references?: string | null; // References header for threading
   attachments?: Attachment[]; // File attachments
+  labelIds?: string[]; // Gmail label IDs to apply to the sent message
 };
 
 const toBase64Url = (input: string) =>
@@ -212,6 +217,26 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
 
   if (!userEmail) {
     throw new Error("Unable to retrieve user email address");
+  }
+
+  // Extract domain from email
+  const domain = userEmail.split("@")[1] || "";
+  
+  // Get or create sending domain
+  const sendingDomain = await getOrCreateSendingDomain(payload.userId, domain);
+
+  // Check if email should be suppressed (too many bounces)
+  const shouldSuppress = await shouldSuppressEmail(payload.to, sendingDomain.id);
+  if (shouldSuppress) {
+    throw new Error(`Email ${payload.to} is suppressed due to previous bounces`);
+  }
+
+  // Check warm-up limits if domain is in warm-up
+  if (payload.isCampaign) {
+    const warmupCheck = await canSendEmail(sendingDomain.id, 1);
+    if (!warmupCheck.canSend) {
+      throw new Error(`Cannot send email: ${warmupCheck.reason || "Warm-up limit reached"}`);
+    }
   }
 
   // Get user's signature
@@ -403,18 +428,62 @@ export const sendEmailViaGmail = async (payload: SendEmailInput) => {
 
   const raw = toBase64Url(message);
 
-  const response = await gmail.users.messages.send({
-    userId: "me",
-    requestBody: {
-      raw,
-      threadId: payload.threadId ?? undefined,
-    },
-  });
+  try {
+    const response = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: {
+        raw,
+        threadId: payload.threadId ?? undefined,
+      },
+    });
 
-  return {
-    id: response.data.id ?? "",
-    threadId: response.data.threadId ?? null,
-  };
+    // Apply labels if provided
+    if (payload.labelIds && payload.labelIds.length > 0) {
+      try {
+        await gmail.users.messages.modify({
+          userId: "me",
+          id: response.data.id ?? "",
+          requestBody: {
+            addLabelIds: payload.labelIds,
+          },
+        });
+      } catch (labelError: any) {
+        // Log but don't fail the send if label application fails
+        logger.warn(
+          { error: labelError, messageId: response.data.id, labelIds: payload.labelIds },
+          "Failed to apply labels to sent message"
+        );
+      }
+    }
+
+    // Record successful send
+    if (payload.isCampaign) {
+      await recordEmailSent(sendingDomain.id);
+      await recordEmailDelivered(sendingDomain.id);
+    }
+
+    return {
+      id: response.data.id ?? "",
+      threadId: response.data.threadId ?? null,
+    };
+  } catch (error: any) {
+    // Handle bounces
+    const errorMessage = error.message || String(error);
+    const bounceInfo = parseBounceFromError(errorMessage);
+    
+    // Record bounce
+    await recordBounce({
+      recipientEmail: payload.to,
+      bounceType: bounceInfo.bounceType,
+      bounceCategory: bounceInfo.bounceCategory,
+      reason: bounceInfo.reason || errorMessage,
+      rawResponse: JSON.stringify(error),
+      sendingDomainId: sendingDomain.id,
+    });
+
+    // Re-throw the error
+    throw error;
+  }
 };
 
 export const gmailDeliveryService = {

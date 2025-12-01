@@ -14,6 +14,7 @@ export const campaignsRouter = Router();
 campaignsRouter.get("/unsubscribe", async (req, res, next) => {
   try {
     const email = typeof req.query.email === "string" ? req.query.email : null;
+    const campaignId = typeof req.query.campaign === "string" ? req.query.campaign : null;
     
     if (!email) {
       res.status(400).send(`
@@ -29,10 +30,34 @@ campaignsRouter.get("/unsubscribe", async (req, res, next) => {
       return;
     }
 
-    // In a real implementation, you would:
-    // 1. Verify the email belongs to a campaign
-    // 2. Mark the recipient as unsubscribed
-    // 3. Update the campaign recipient status
+    // Record unsubscribe
+    try {
+      await prisma.unsubscribeRecord.create({
+        data: {
+          email,
+          campaignId: campaignId || undefined,
+          source: "link",
+        },
+      });
+
+      // Mark campaign recipient as unsubscribed if campaign ID provided
+      if (campaignId) {
+        await prisma.campaignRecipient.updateMany({
+          where: {
+            campaignId,
+            email,
+          },
+          data: {
+            status: "UNSUBSCRIBED",
+          },
+        });
+      }
+    } catch (error: any) {
+      // Ignore duplicate unsubscribe errors
+      if (!error.message?.includes("Unique constraint")) {
+        throw error;
+      }
+    }
     
     res.status(200).send(`
       <!DOCTYPE html>
@@ -182,6 +207,72 @@ campaignsRouter.post("/:campaignId/cancel", requireUser, async (req, res, next) 
     await campaignEngine.cancelCampaign(campaignId);
     res.status(200).json({ campaignId, status: "cancelled" });
   } catch (error) {
+    next(error);
+  }
+});
+
+// Update campaign (for folder assignment, etc.)
+const updateCampaignSchema = z.object({
+  folderId: z.string().nullable().optional(),
+  name: z.string().optional(),
+});
+
+campaignsRouter.patch("/:campaignId", requireUser, async (req, res, next) => {
+  try {
+    if (!req.currentUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { campaignId } = req.params;
+    const payload = updateCampaignSchema.parse(req.body);
+
+    // Verify campaign belongs to user
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        id: campaignId,
+        userId: req.currentUser.id,
+      },
+      include: {
+        // folder relation will be available after migration
+      },
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+
+    // If folder is being set, get the Gmail label ID from the folder
+    let gmailLabelId: string | undefined;
+    if (payload.folderId) {
+      const folder = await prisma.campaignFolder.findFirst({
+        where: {
+          id: payload.folderId,
+          userId: req.currentUser.id,
+        },
+      });
+
+      if (!folder) {
+        return res.status(404).json({ error: "Folder not found" });
+      }
+
+      gmailLabelId = folder.gmailLabelId || undefined;
+    }
+
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        ...(payload.name && { name: payload.name }),
+        ...(payload.folderId !== undefined && { folderId: payload.folderId }),
+        ...(gmailLabelId !== undefined && { gmailLabelId }),
+      },
+    });
+
+    res.json(updated);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues });
+    }
     next(error);
   }
 });
