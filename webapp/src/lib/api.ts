@@ -1,12 +1,8 @@
-// Use relative URL for API calls - Next.js rewrites will proxy to backend
-// This avoids needing NEXT_PUBLIC_API_URL at build time
-// In browser, use relative URL; in SSR, use production backend URL
+// Use direct backend URL for API calls
+// Next.js rewrites can be unreliable, so we use the direct backend URL
 const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    // Client-side: use relative URL, Next.js rewrites will handle it
-    return '';
-  }
-  // Server-side: use production backend URL (not localhost)
+  // Always use the backend URL directly (works in both client and server)
+  // This avoids issues with Next.js rewrites and ensures reliable API calls
   return process.env.NEXT_PUBLIC_API_URL || 'https://taskforce-backend-production.up.railway.app';
 };
 
