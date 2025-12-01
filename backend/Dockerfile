@@ -3,19 +3,19 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files from backend directory (Railway builds from repo root)
-COPY backend/package*.json ./
-COPY backend/prisma ./prisma/
+# Copy package files (Railway builds from backend/ directory as root)
+COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install dependencies
 RUN npm ci
 
 # Copy start.sh first (before copying everything else, to ensure it's included)
-COPY backend/start.sh ./start.sh
+COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 
-# Copy source code from backend directory
-COPY backend/ .
+# Copy source code
+COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -29,7 +29,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install production dependencies including prisma for migrations
-COPY backend/package*.json ./
+COPY package*.json ./
 RUN npm ci --only=production && npm install prisma --save
 
 # Copy built files and Prisma
