@@ -3,19 +3,28 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files (Railway builds from backend/ directory as root)
+# Copy package files first (for better layer caching)
 COPY package*.json ./
-COPY prisma ./prisma/
 
 # Install dependencies
 RUN npm ci
 
-# Copy start.sh first (before copying everything else, to ensure it's included)
-COPY start.sh ./start.sh
-RUN chmod +x ./start.sh
-
-# Copy source code
+# Copy everything (including prisma, src, start.sh, etc.)
+# Railway builds from backend/ directory as root, so all files are relative to backend/
 COPY . .
+
+# Verify prisma directory exists
+RUN if [ ! -f ./prisma/schema.prisma ]; then \
+      echo "ERROR: prisma/schema.prisma not found!" && \
+      echo "Current directory contents:" && \
+      ls -la && \
+      echo "Looking for prisma directory:" && \
+      find . -name "schema.prisma" -type f 2>/dev/null || echo "schema.prisma not found anywhere" && \
+      exit 1; \
+    fi
+
+# Make start.sh executable
+RUN chmod +x ./start.sh
 
 # Generate Prisma client
 RUN npx prisma generate
