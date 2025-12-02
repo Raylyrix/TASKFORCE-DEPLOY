@@ -3,14 +3,26 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files from webapp directory (Railway builds from repo root)
-COPY webapp/package*.json ./
+# Copy everything (Railway may build from repo root or webapp/ directory)
+COPY . .
+
+# Handle both build contexts: repo root (webapp/package.json) or webapp root (package.json)
+# If webapp/ subdirectory exists, copy its contents to root
+RUN if [ -d ./webapp ] && [ ! -f ./package.json ]; then \
+      echo "Detected repo root build context, copying webapp files to root..." && \
+      cp -r ./webapp/* ./ && \
+      cp -r ./webapp/.* ./ 2>/dev/null || true; \
+    fi
+
+# Verify package.json exists
+RUN if [ ! -f ./package.json ]; then \
+      echo "ERROR: package.json not found!" && \
+      ls -la && \
+      exit 1; \
+    fi
 
 # Install dependencies
 RUN npm ci
-
-# Copy source code from webapp directory
-COPY webapp/ .
 
 # Build Next.js app
 # Railway automatically passes environment variables as build args
@@ -31,7 +43,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install production dependencies
-COPY webapp/package*.json ./
+COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy built files
