@@ -1,11 +1,20 @@
--- CreateEnum
-CREATE TYPE "BounceType" AS ENUM ('HARD', 'SOFT');
+-- CreateEnum: Only create if they don't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BounceType') THEN
+        CREATE TYPE "BounceType" AS ENUM ('HARD', 'SOFT');
+    END IF;
+END $$;
 
--- CreateEnum
-CREATE TYPE "BounceCategory" AS ENUM ('INVALID_EMAIL', 'MAILBOX_FULL', 'MESSAGE_TOO_LARGE', 'CONTENT_REJECTED', 'BLOCKED', 'OTHER');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BounceCategory') THEN
+        CREATE TYPE "BounceCategory" AS ENUM ('INVALID_EMAIL', 'MAILBOX_FULL', 'MESSAGE_TOO_LARGE', 'CONTENT_REJECTED', 'BLOCKED', 'OTHER');
+    END IF;
+END $$;
 
--- CreateTable
-CREATE TABLE "SendingDomain" (
+-- CreateTable: Only create if it doesn't exist
+CREATE TABLE IF NOT EXISTS "SendingDomain" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "domain" TEXT NOT NULL,
@@ -25,8 +34,8 @@ CREATE TABLE "SendingDomain" (
     CONSTRAINT "SendingDomain_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "DomainReputation" (
+-- CreateTable: Only create if it doesn't exist
+CREATE TABLE IF NOT EXISTS "DomainReputation" (
     "id" TEXT NOT NULL,
     "sendingDomainId" TEXT NOT NULL,
     "bounceRate" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
@@ -49,8 +58,8 @@ CREATE TABLE "DomainReputation" (
     CONSTRAINT "DomainReputation_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "EmailBounce" (
+-- CreateTable: Only create if it doesn't exist
+CREATE TABLE IF NOT EXISTS "EmailBounce" (
     "id" TEXT NOT NULL,
     "sendingDomainId" TEXT,
     "messageLogId" TEXT,
@@ -64,8 +73,8 @@ CREATE TABLE "EmailBounce" (
     CONSTRAINT "EmailBounce_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "EmailComplaint" (
+-- CreateTable: Only create if it doesn't exist
+CREATE TABLE IF NOT EXISTS "EmailComplaint" (
     "id" TEXT NOT NULL,
     "sendingDomainId" TEXT,
     "messageLogId" TEXT,
@@ -77,8 +86,8 @@ CREATE TABLE "EmailComplaint" (
     CONSTRAINT "EmailComplaint_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "EmailWarmup" (
+-- CreateTable: Only create if it doesn't exist
+CREATE TABLE IF NOT EXISTS "EmailWarmup" (
     "id" TEXT NOT NULL,
     "sendingDomainId" TEXT NOT NULL,
     "day" INTEGER NOT NULL,
@@ -160,8 +169,31 @@ ALTER TABLE "EmailComplaint" ADD CONSTRAINT "EmailComplaint_sendingDomainId_fkey
 -- AddForeignKey
 ALTER TABLE "EmailComplaint" ADD CONSTRAINT "EmailComplaint_messageLogId_fkey" FOREIGN KEY ("messageLogId") REFERENCES "MessageLog"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "UnsubscribeRecord" ADD CONSTRAINT "UnsubscribeRecord_sendingDomainId_fkey" FOREIGN KEY ("sendingDomainId") REFERENCES "SendingDomain"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- AlterTable: Add sendingDomainId column to UnsubscribeRecord if it doesn't exist
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='UnsubscribeRecord') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='UnsubscribeRecord' AND column_name='sendingDomainId') THEN
+            ALTER TABLE "UnsubscribeRecord" ADD COLUMN "sendingDomainId" TEXT;
+        END IF;
+    END IF;
+END $$;
+
+-- AddForeignKey: Only add if UnsubscribeRecord table exists and column exists
+DO $$ 
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name='UnsubscribeRecord'
+    ) AND EXISTS (
+        SELECT 1 FROM information_schema.columns WHERE table_name='UnsubscribeRecord' AND column_name='sendingDomainId'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'UnsubscribeRecord_sendingDomainId_fkey'
+    ) THEN
+        ALTER TABLE "UnsubscribeRecord" ADD CONSTRAINT "UnsubscribeRecord_sendingDomainId_fkey" 
+        FOREIGN KEY ("sendingDomainId") REFERENCES "SendingDomain"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
 ALTER TABLE "EmailWarmup" ADD CONSTRAINT "EmailWarmup_sendingDomainId_fkey" FOREIGN KEY ("sendingDomainId") REFERENCES "SendingDomain"("id") ON DELETE CASCADE ON UPDATE CASCADE;
