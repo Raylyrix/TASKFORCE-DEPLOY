@@ -99,8 +99,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 type AdminMetrics = {
+  period?: {
+    selected: string;
+    days: number;
+    startDate: string;
+    endDate: string;
+  };
   overview: {
     totalUsers: number;
+    newUsers?: number;
     totalCampaigns: number;
     totalRecipients: number;
     totalMessages: number;
@@ -129,18 +136,28 @@ type AdminMetrics = {
     email: string;
     displayName: string | null;
     campaignCount: number;
+    scheduledEmailCount?: number;
+    createdAt?: string;
+  }>;
+  userEmailStats?: Array<{
+    userId: string;
+    email: string;
+    totalEmailsSent: number;
+    totalCampaigns: number;
   }>;
   charts: {
     dailyCampaigns: Array<{ date: string; count: number }>;
     dailyMessages: Array<{ date: string; count: number }>;
     dailyTrackingEvents: Array<{ date: string; count: number }>;
+    dailyNewUsers?: Array<{ date: string; count: number }>;
   };
   databaseBreakdown: Record<string, { rows: number; sizeMB: number }>;
 };
 
 export const api = {
   admin: {
-    getMetrics: () => apiRequest<AdminMetrics>("/api/admin/metrics"),
+    getMetrics: (period?: string) => 
+      apiRequest<AdminMetrics>(`/api/admin/metrics${period ? `?period=${period}` : ""}`),
     deleteData: (config: Record<string, number>) =>
       apiRequest<{
         success: boolean;
@@ -189,6 +206,59 @@ export const api = {
         }>;
         count: number;
       }>("/api/admin/active-campaigns"),
+    getUserStats: () =>
+      apiRequest<{
+        users: Array<{
+          userId: string;
+          email: string;
+          displayName: string | null;
+          createdAt: string;
+          totalCampaigns: number;
+          totalEmailsSent: number;
+          totalEmailsFailed: number;
+          totalScheduledEmails: number;
+          lastCampaignDate: string | null;
+        }>;
+        totalUsers: number;
+      }>("/api/admin/user-stats"),
+    getFailedScheduledEmails: () =>
+      apiRequest<{
+        failedEmails: Array<{
+          id: string;
+          to: string;
+          subject: string;
+          scheduledAt: string;
+          error: string | null;
+          user: {
+            id: string;
+            email: string;
+            displayName: string | null;
+          };
+          createdAt: string;
+        }>;
+        count: number;
+      }>("/api/admin/failed-scheduled-emails"),
+    restartScheduledEmail: (id: string) =>
+      apiRequest<{
+        success: boolean;
+        message: string;
+        scheduledEmail: {
+          id: string;
+          to: string;
+          subject: string;
+          scheduledAt: string;
+        };
+      }>(`/api/admin/restart-scheduled-email/${id}`, {
+        method: "POST",
+      }),
+    restartAllFailedEmails: () =>
+      apiRequest<{
+        success: boolean;
+        message: string;
+        count: number;
+      }>("/api/admin/restart-all-failed-emails", {
+        method: "POST",
+      }),
   },
   // Auth
   auth: {

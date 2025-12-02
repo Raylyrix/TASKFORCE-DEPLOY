@@ -52,14 +52,15 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState("30d");
   const [deleteConfig, setDeleteConfig] = useState({
-    completedCampaigns: 90,
-    draftCampaigns: 30,
-    sentMessages: 90,
-    trackingEvents: 90,
-    calendarCache: 7,
-    emailDrafts: 30,
-    oldBookings: 180,
+    completedCampaigns: 365,
+    draftCampaigns: 180,
+    sentMessages: 365,
+    trackingEvents: 365,
+    calendarCache: 30,
+    emailDrafts: 180,
+    oldBookings: 730,
   });
 
   // Check admin status
@@ -78,10 +79,57 @@ export default function AdminPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["admin-metrics"],
-    queryFn: () => api.admin.getMetrics(),
+    queryKey: ["admin-metrics", selectedPeriod],
+    queryFn: () => api.admin.getMetrics(selectedPeriod),
     enabled: isAdmin === true,
     refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch user stats
+  const {
+    data: userStats,
+    isLoading: userStatsLoading,
+  } = useQuery({
+    queryKey: ["admin-user-stats"],
+    queryFn: () => api.admin.getUserStats(),
+    enabled: isAdmin === true,
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch failed scheduled emails
+  const {
+    data: failedEmails,
+    isLoading: failedEmailsLoading,
+    refetch: refetchFailedEmails,
+  } = useQuery({
+    queryKey: ["admin-failed-emails"],
+    queryFn: () => api.admin.getFailedScheduledEmails(),
+    enabled: isAdmin === true,
+    refetchInterval: 30000,
+  });
+
+  // Restart single email mutation
+  const restartEmailMutation = useMutation({
+    mutationFn: (id: string) => api.admin.restartScheduledEmail(id),
+    onSuccess: () => {
+      refetchFailedEmails();
+      alert("Email restarted successfully!");
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    },
+  });
+
+  // Restart all failed emails mutation
+  const restartAllMutation = useMutation({
+    mutationFn: () => api.admin.restartAllFailedEmails(),
+    onSuccess: (data) => {
+      refetchFailedEmails();
+      alert(`Successfully restarted ${data.count} failed emails!`);
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    },
   });
 
   // Delete data mutation
@@ -149,14 +197,29 @@ export default function AdminPage() {
             </h1>
             <p className="text-gray-600 mt-1">System metrics and data management</p>
           </div>
-          <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex gap-3">
+            {/* Time Period Selector */}
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="180d">Last 6 months</option>
+              <option value="365d">Last year</option>
+            </select>
+            <button
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {isLoading && !metrics ? (
@@ -172,6 +235,7 @@ export default function AdminPage() {
                 label="Total Users"
                 value={metrics.overview.totalUsers.toLocaleString()}
                 color="text-blue-600"
+                subtitle={metrics.overview.newUsers ? `+${metrics.overview.newUsers} in period` : undefined}
               />
               <MetricCard
                 icon={<Mail className="w-6 h-6" />}
@@ -341,6 +405,112 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {/* User Email Statistics */}
+            {userStats && !userStatsLoading && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  User Email Statistics
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campaigns</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Emails Sent</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Failed</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scheduled</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member Since</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {userStats.users.slice(0, 20).map((user) => (
+                        <tr key={user.userId} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="font-medium text-gray-900">{user.email}</p>
+                              {user.displayName && (
+                                <p className="text-sm text-gray-500">{user.displayName}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">{user.totalCampaigns}</td>
+                          <td className="px-4 py-3 text-green-600 font-semibold">{user.totalEmailsSent.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-red-600">{user.totalEmailsFailed}</td>
+                          <td className="px-4 py-3 text-blue-600">{user.totalScheduledEmails}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {userStats.users.length === 0 && (
+                    <p className="text-center text-gray-500 py-8">No users found</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Failed Scheduled Emails */}
+            {failedEmails && !failedEmailsLoading && failedEmails.count > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    Failed Scheduled Emails ({failedEmails.count})
+                  </h2>
+                  <button
+                    onClick={() => restartAllMutation.mutate()}
+                    disabled={restartAllMutation.isPending}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${restartAllMutation.isPending ? "animate-spin" : ""}`} />
+                    Restart All
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">To</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scheduled</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Error</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {failedEmails.failedEmails.map((email) => (
+                        <tr key={email.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-gray-900">{email.to}</td>
+                          <td className="px-4 py-3 text-gray-900 max-w-xs truncate">{email.subject}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {new Date(email.scheduledAt).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-red-600 max-w-xs truncate" title={email.error || ""}>
+                            {email.error || "Unknown error"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{email.user.email}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => restartEmailMutation.mutate(email.id)}
+                              disabled={restartEmailMutation.isPending}
+                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                              Restart
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Database Breakdown */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Database Breakdown</h2>
@@ -385,16 +555,17 @@ export default function AdminPage() {
                         <p className="font-medium text-yellow-900 mb-1">Safety Guarantee</p>
                         <p className="text-sm text-yellow-700">
                           This will only delete:
-                          <br />• Old COMPLETED campaigns (90+ days)
-                          <br />• Old DRAFT campaigns (30+ days)
-                          <br />• Old messages from COMPLETED campaigns (90+ days)
-                          <br />• Old tracking events (90+ days)
+                          <br />• Old COMPLETED campaigns ({deleteConfig.completedCampaigns}+ days)
+                          <br />• Old DRAFT campaigns ({deleteConfig.draftCampaigns}+ days)
+                          <br />• Old messages from COMPLETED campaigns ({deleteConfig.sentMessages}+ days)
+                          <br />• Old tracking events ({deleteConfig.trackingEvents}+ days)
                           <br />
                           <br />
                           <strong>It will NEVER delete:</strong>
                           <br />• Running campaigns
                           <br />• Scheduled campaigns
                           <br />• Paused campaigns
+                          <br />• Campaigns with future follow-ups
                           <br />• Follow-ups
                           <br />• Replies
                         </p>
