@@ -3,20 +3,26 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy everything (Railway may build from repo root or webapp/ directory)
-COPY . .
+# Copy package files first (for better layer caching)
+# Try webapp/package*.json first (repo root context), fallback handled below
+COPY . ./temp_copy
 
-# Handle both build contexts: repo root (webapp/package.json) or webapp root (package.json)
-# If webapp/ subdirectory exists, copy its contents to root
-RUN if [ -d ./webapp ] && [ ! -f ./package.json ]; then \
-      echo "Detected repo root build context, copying webapp files to root..." && \
-      cp -r ./webapp/* ./ && \
-      cp -r ./webapp/.* ./ 2>/dev/null || true; \
-    fi
+# Handle both build contexts: repo root (webapp/) or webapp root (.)
+RUN if [ -d ./temp_copy/webapp ] && [ -f ./temp_copy/webapp/package.json ]; then \
+      echo "Detected repo root build context, copying webapp files..." && \
+      cp -r ./temp_copy/webapp/* ./ && \
+      cp -r ./temp_copy/webapp/.* ./ 2>/dev/null || true; \
+    else \
+      echo "Detected webapp root build context, copying files..." && \
+      cp -r ./temp_copy/* ./ && \
+      cp -r ./temp_copy/.* ./ 2>/dev/null || true; \
+    fi && \
+    rm -rf ./temp_copy
 
 # Verify package.json exists
 RUN if [ ! -f ./package.json ]; then \
       echo "ERROR: package.json not found!" && \
+      echo "Current directory:" && \
       ls -la && \
       exit 1; \
     fi
@@ -42,8 +48,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Copy package files from builder
+COPY --from=builder /app/package*.json ./
+
 # Install production dependencies
-COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy built files
