@@ -35,16 +35,16 @@ type RetentionConfig = {
 };
 
 const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
-  completedCampaigns: 90, // 3 months
-  draftCampaigns: 30, // 1 month
-  sentMessages: 90, // 3 months
-  failedMessages: 30, // 1 month
-  trackingEvents: 90, // 3 months
-  calendarCache: 7, // 1 week
-  emailDrafts: 30, // 1 month
-  oldBookings: 180, // 6 months
-  bounceRecords: 365, // 1 year (important for reputation)
-  complaintRecords: 365, // 1 year (important for reputation)
+  completedCampaigns: 365, // 1 year (5GB storage - more space available)
+  draftCampaigns: 180, // 6 months (keep drafts longer)
+  sentMessages: 365, // 1 year (keep message history longer)
+  failedMessages: 180, // 6 months (keep failures for analysis)
+  trackingEvents: 365, // 1 year (keep tracking data longer)
+  calendarCache: 30, // 1 month (extended cache)
+  emailDrafts: 180, // 6 months (keep drafts longer)
+  oldBookings: 730, // 2 years (keep booking history)
+  bounceRecords: 730, // 2 years (important for reputation)
+  complaintRecords: 730, // 2 years (important for reputation)
 };
 
 /**
@@ -479,13 +479,24 @@ async function getDatabaseSizeEstimate(): Promise<{
 
   for (const table of tables) {
     try {
-      const count = await (prisma as any)[table.name.toLowerCase()].count();
+      // Map table names to Prisma model names (handle case sensitivity)
+      const modelName = table.name.charAt(0).toLowerCase() + table.name.slice(1);
+      const model = (prisma as any)[modelName];
+      
+      if (!model || typeof model.count !== 'function') {
+        logger.warn({ table: table.name, modelName }, "Table model not found in Prisma client");
+        breakdown[table.name] = { rows: 0, sizeMB: 0 };
+        continue;
+      }
+      
+      const count = await model.count();
       const sizeMB = count * table.avgSize;
       breakdown[table.name] = { rows: count, sizeMB: Math.round(sizeMB * 100) / 100 };
       totalRows += count;
       totalSizeMB += sizeMB;
     } catch (error) {
       logger.warn({ table: table.name, error }, "Could not count table rows");
+      breakdown[table.name] = { rows: 0, sizeMB: 0 };
     }
   }
 
