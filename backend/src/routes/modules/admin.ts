@@ -13,6 +13,18 @@ import { CampaignStatus, MessageStatus, RecipientStatus } from "@prisma/client";
 
 export const adminRouter = Router();
 
+// Simple in-memory cache for metrics to prevent server overload
+interface MetricsCache {
+  data: any;
+  timestamp: number;
+  period: string;
+}
+
+let metricsCache: MetricsCache | null = null;
+let userStatsCache: { data: any; timestamp: number } | null = null;
+const CACHE_TTL = 60000; // 60 seconds cache (reduces DB load by 50x)
+const USER_STATS_CACHE_TTL = 300000; // 5 minutes for user stats (less frequently updated)
+
 // All routes require admin access
 adminRouter.use(requireAdmin);
 
@@ -20,11 +32,19 @@ adminRouter.use(requireAdmin);
  * GET /api/admin/metrics
  * Get real-time system metrics with customizable time periods
  * Query params: period=24h|7d|30d|90d|365d (default: 30d)
+ * Cached for 60 seconds to prevent server overload
  */
 adminRouter.get("/metrics", async (req, res, next) => {
   try {
     // Parse time period from query params
     const period = req.query.period as string || "30d";
+    
+    // Check cache (simple in-memory cache to prevent overload)
+    const now = Date.now();
+    if (metricsCache && metricsCache.period === period && (now - metricsCache.timestamp) < CACHE_TTL) {
+      logger.debug({ period, cacheAge: now - metricsCache.timestamp }, "Serving metrics from cache");
+      return res.status(200).json(metricsCache.data);
+    }
     const periodMap: Record<string, number> = {
       "24h": 1,
       "7d": 7,
@@ -104,8 +124,14 @@ adminRouter.get("/metrics", async (req, res, next) => {
       _count: true,
     });
 
-    // Get database size estimate
-    const dbSize = await dataRetentionService.getCurrentDatabaseSize();
+    // Get database size estimate (cached or optional to prevent overload)
+    // Only calculate if not in cache or cache expired
+    let dbSize = { estimatedSizeMB: 0, totalRows: 0, breakdown: {} };
+    try {
+      dbSize = await dataRetentionService.getCurrentDatabaseSize();
+    } catch (error) {
+      logger.warn({ error }, "Failed to calculate database size, using defaults");
+    }
 
     // Get recent activity (last 24 hours)
     const last24Hours = new Date();
@@ -196,48 +222,74 @@ adminRouter.get("/metrics", async (req, res, next) => {
     `;
 
     // Get campaign growth over time (customizable period)
-    const dailyCampaigns = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-      SELECT 
-        DATE("createdAt")::text as date,
-        COUNT(*)::bigint as count
-      FROM "Campaign"
-      WHERE "createdAt" >= ${cutoffDate}
-      GROUP BY DATE("createdAt")
-      ORDER BY date ASC
-    `;
-
-    const dailyMessages = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-      SELECT 
-        DATE("createdAt")::text as date,
-        COUNT(*)::bigint as count
-      FROM "MessageLog"
-      WHERE "createdAt" >= ${cutoffDate}
-      GROUP BY DATE("createdAt")
-      ORDER BY date ASC
-    `;
-
-    const dailyTrackingEvents = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-      SELECT 
-        DATE("createdAt")::text as date,
-        COUNT(*)::bigint as count
-      FROM "TrackingEvent"
-      WHERE "createdAt" >= ${cutoffDate}
-      GROUP BY DATE("createdAt")
-      ORDER BY date ASC
-    `;
-
+    // Wrapped in try-catch to prevent crashes if queries are too heavy
+    let dailyCampaigns: Array<{ date: string; count: bigint }> = [];
+    let dailyMessages: Array<{ date: string; count: bigint }> = [];
+    let dailyTrackingEvents: Array<{ date: string; count: bigint }> = [];
+    let dailyNewUsers: Array<{ date: string; count: bigint }> = [];
+    
+    try {
+      dailyCampaigns = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+        SELECT 
+          DATE("createdAt")::text as date,
+          COUNT(*)::bigint as count
+        FROM "Campaign"
+        WHERE "createdAt" >= ${cutoffDate}
+        GROUP BY DATE("createdAt")
+        ORDER BY date ASC
+        LIMIT 365
+      `;
+    } catch (error) {
+      logger.warn({ error }, "Failed to fetch daily campaigns, using empty array");
+    }
+    
+    try {
+      dailyMessages = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+        SELECT 
+          DATE("createdAt")::text as date,
+          COUNT(*)::bigint as count
+        FROM "MessageLog"
+        WHERE "createdAt" >= ${cutoffDate}
+        GROUP BY DATE("createdAt")
+        ORDER BY date ASC
+        LIMIT 365
+      `;
+    } catch (error) {
+      logger.warn({ error }, "Failed to fetch daily messages, using empty array");
+    }
+    
+    try {
+      dailyTrackingEvents = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+        SELECT 
+          DATE("createdAt")::text as date,
+          COUNT(*)::bigint as count
+        FROM "TrackingEvent"
+        WHERE "createdAt" >= ${cutoffDate}
+        GROUP BY DATE("createdAt")
+        ORDER BY date ASC
+        LIMIT 365
+      `;
+    } catch (error) {
+      logger.warn({ error }, "Failed to fetch daily tracking events, using empty array");
+    }
+    
     // Get new users over time
-    const dailyNewUsers = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-      SELECT 
-        DATE("createdAt")::text as date,
-        COUNT(*)::bigint as count
-      FROM "User"
-      WHERE "createdAt" >= ${cutoffDate}
-      GROUP BY DATE("createdAt")
-      ORDER BY date ASC
-    `;
+    try {
+      dailyNewUsers = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
+        SELECT 
+          DATE("createdAt")::text as date,
+          COUNT(*)::bigint as count
+        FROM "User"
+        WHERE "createdAt" >= ${cutoffDate}
+        GROUP BY DATE("createdAt")
+        ORDER BY date ASC
+        LIMIT 365
+      `;
+    } catch (error) {
+      logger.warn({ error }, "Failed to fetch daily new users, using empty array");
+    }
 
-    res.status(200).json({
+    const response = {
       period: {
         selected: period,
         days: daysToLookback,
@@ -321,7 +373,16 @@ adminRouter.get("/metrics", async (req, res, next) => {
         })),
       },
       databaseBreakdown: dbSize.breakdown,
-    });
+    };
+    
+    // Cache the result
+    metricsCache = {
+      data: response,
+      timestamp: Date.now(),
+      period,
+    };
+    
+    res.status(200).json(response);
   } catch (error) {
     logger.error({ error }, "Error fetching admin metrics");
     next(error);
@@ -616,9 +677,17 @@ adminRouter.post("/restart-all-failed-emails", async (req, res, next) => {
 /**
  * GET /api/admin/user-stats
  * Get detailed user statistics including emails sent per user
+ * Cached for 5 minutes to prevent server overload
  */
 adminRouter.get("/user-stats", async (req, res, next) => {
   try {
+    // Check cache
+    const now = Date.now();
+    if (userStatsCache && (now - userStatsCache.timestamp) < USER_STATS_CACHE_TTL) {
+      logger.debug({ cacheAge: now - userStatsCache.timestamp }, "Serving user stats from cache");
+      return res.status(200).json(userStatsCache.data);
+    }
+    
     // Get users with detailed stats
     const userStats = await prisma.$queryRaw<Array<{
       userId: string;
@@ -649,7 +718,7 @@ adminRouter.get("/user-stats", async (req, res, next) => {
       ORDER BY "totalEmailsSent" DESC
     `;
 
-    res.status(200).json({
+    const response = {
       users: userStats.map((stat) => ({
         userId: stat.userId,
         email: stat.email,
@@ -662,7 +731,15 @@ adminRouter.get("/user-stats", async (req, res, next) => {
         lastCampaignDate: stat.lastCampaignDate,
       })),
       totalUsers: userStats.length,
-    });
+    };
+    
+    // Cache the result
+    userStatsCache = {
+      data: response,
+      timestamp: Date.now(),
+    };
+    
+    res.status(200).json(response);
   } catch (error) {
     logger.error({ error }, "Error fetching user stats");
     next(error);

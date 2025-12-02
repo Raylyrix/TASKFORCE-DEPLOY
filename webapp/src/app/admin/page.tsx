@@ -82,7 +82,7 @@ export default function AdminPage() {
     queryKey: ["admin-metrics", selectedPeriod],
     queryFn: () => api.admin.getMetrics(selectedPeriod),
     enabled: isAdmin === true,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 120000, // Refresh every 2 minutes (reduced from 30s to prevent overload)
   });
 
   // Fetch user stats
@@ -93,7 +93,7 @@ export default function AdminPage() {
     queryKey: ["admin-user-stats"],
     queryFn: () => api.admin.getUserStats(),
     enabled: isAdmin === true,
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 300000, // Refresh every 5 minutes (reduced from 1min to prevent overload)
   });
 
   // Fetch failed scheduled emails
@@ -105,7 +105,7 @@ export default function AdminPage() {
     queryKey: ["admin-failed-emails"],
     queryFn: () => api.admin.getFailedScheduledEmails(),
     enabled: isAdmin === true,
-    refetchInterval: 30000,
+    refetchInterval: 120000, // Refresh every 2 minutes (reduced from 30s to prevent overload)
   });
 
   // Restart single email mutation
