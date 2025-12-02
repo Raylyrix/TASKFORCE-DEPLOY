@@ -48,7 +48,7 @@ WORKDIR /app
 
 # Install production dependencies including prisma for migrations
 COPY package*.json ./
-RUN npm ci --only=production && npm install prisma --save
+RUN npm ci --only=production && npm install prisma@6.19.0 --save
 
 # Copy built files and Prisma
 COPY --from=builder /app/dist ./dist
