@@ -46,8 +46,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy package files
+COPY --from=builder /app/package*.json ./
+
 # Install production dependencies including prisma for migrations
-COPY package*.json ./
 RUN npm ci --only=production && npm install prisma@6.19.0 --save
 
 # Copy built files and Prisma
