@@ -15,6 +15,11 @@ if [ -n "$DATABASE_URL" ] && echo "$DATABASE_URL" | grep -q "^postgres"; then
   npx prisma migrate resolve --applied 20251112153000_meeting_reminders 2>/dev/null || \
   echo "No failed migrations to resolve or already resolved"
   
+  # Resolve the SendingDomain migration if it failed
+  npx prisma migrate resolve --rolled-back 20251202000000_add_sending_domain_tables 2>/dev/null || \
+  npx prisma migrate resolve --applied 20251202000000_add_sending_domain_tables 2>/dev/null || \
+  echo "No SendingDomain migration to resolve or already resolved"
+  
   # Now run migrations
   npx prisma migrate deploy || {
     echo "WARNING: Migration failed, but continuing to start server..."
