@@ -20,7 +20,12 @@ RUN if [ ! -f ./package.json ] && [ -f ./backend/package.json ]; then \
     fi
 
 # Install dependencies
-RUN npm ci
+# Use npm install if package-lock.json doesn't exist, npm ci if it does
+RUN if [ -f ./package-lock.json ]; then \
+      npm ci; \
+    else \
+      npm install; \
+    fi
 
 # Verify prisma directory exists
 RUN if [ ! -f ./prisma/schema.prisma ]; then \
