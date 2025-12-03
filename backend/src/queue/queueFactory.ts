@@ -17,10 +17,19 @@ export const createQueue = <TPayload>(name: string) =>
 export const registerWorker = <TPayload>(
   name: string,
   processor: (job: Job<TPayload>) => Promise<void>,
+  options?: { concurrency?: number },
 ) => {
+  // Default to 3 concurrent jobs to prevent server overload
+  // Campaign/follow-up can have slightly more since they're throttled
+  const concurrency = options?.concurrency || 3;
+  
   const worker = new Worker<TPayload>(name, processor, {
     connection: getRedisForBullMQ(),
-    concurrency: AppConfig.nodeEnv === "production" ? 10 : 2,
+    concurrency: AppConfig.nodeEnv === "production" ? concurrency : 2,
+    limiter: {
+      max: concurrency * 10, // Max jobs per duration
+      duration: 1000, // Per second
+    },
   });
 
   worker.on("completed", (job) => {

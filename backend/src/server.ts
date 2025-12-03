@@ -13,12 +13,25 @@ initializeQueryLogger();
 // Initialize background job queues
 initializeQueues();
 
+// Track running tasks to prevent overlapping executions (prevent server overload)
+let isRunningPeriodicSync = false;
+let isRunningScheduledEmails = false;
+let isRunningSnoozedEmails = false;
+
 // Schedule periodic calendar syncs every 15 minutes
 setInterval(async () => {
+  if (isRunningPeriodicSync) {
+    logger.warn("Periodic sync already running, skipping this cycle");
+    return;
+  }
+  
+  isRunningPeriodicSync = true;
   try {
     await schedulePeriodicSyncs();
   } catch (error) {
     logger.error({ error }, "Error scheduling periodic syncs");
+  } finally {
+    isRunningPeriodicSync = false;
   }
 }, 15 * 60 * 1000); // 15 minutes
 
@@ -29,10 +42,18 @@ schedulePeriodicSyncs().catch((error) => {
 
 // Process scheduled emails every minute
 setInterval(async () => {
+  if (isRunningScheduledEmails) {
+    logger.warn("Scheduled emails processing already running, skipping this cycle");
+    return;
+  }
+  
+  isRunningScheduledEmails = true;
   try {
     await processScheduledEmails();
   } catch (error) {
     logger.error({ error }, "Error processing scheduled emails");
+  } finally {
+    isRunningScheduledEmails = false;
   }
 }, 60 * 1000); // 1 minute
 
@@ -43,10 +64,18 @@ processScheduledEmails().catch((error) => {
 
 // Process snoozed emails every minute
 setInterval(async () => {
+  if (isRunningSnoozedEmails) {
+    logger.warn("Snoozed emails processing already running, skipping this cycle");
+    return;
+  }
+  
+  isRunningSnoozedEmails = true;
   try {
     await processSnoozedEmails();
   } catch (error) {
     logger.error({ error }, "Error processing snoozed emails");
+  } finally {
+    isRunningSnoozedEmails = false;
   }
 }, 60 * 1000); // 1 minute
 
@@ -54,6 +83,27 @@ setInterval(async () => {
 processSnoozedEmails().catch((error) => {
   logger.error({ error }, "Error running initial snoozed emails check");
 });
+
+// Memory monitoring - log every 5 minutes to track for leaks
+setInterval(() => {
+  const usage = process.memoryUsage();
+  const memoryMB = {
+    rss: Math.round(usage.rss / 1024 / 1024), // Resident Set Size
+    heapUsed: Math.round(usage.heapUsed / 1024 / 1024), // Heap actually used
+    heapTotal: Math.round(usage.heapTotal / 1024 / 1024), // Total heap allocated
+    external: Math.round(usage.external / 1024 / 1024), // External memory (buffers, etc)
+  };
+  
+  logger.info({ memory: memoryMB }, "Memory usage check");
+  
+  // Warn if memory usage is high (> 400MB heap used)
+  if (memoryMB.heapUsed > 400) {
+    logger.warn(
+      { memory: memoryMB },
+      "High memory usage detected - potential memory leak or high load",
+    );
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
 
 const app = createApp();
 const server = app.listen(AppConfig.port, () => {

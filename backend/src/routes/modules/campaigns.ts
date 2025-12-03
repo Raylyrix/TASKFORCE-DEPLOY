@@ -4,6 +4,7 @@ import { z } from "zod";
 import { cache, cacheKeys, CACHE_TTL } from "../../lib/cache";
 import { campaignEngine } from "../../services/campaignEngine";
 import { requireUser } from "../../middleware/requireUser";
+import { campaignCreationRateLimiter, campaignStartRateLimiter } from "../../middleware/rateLimiter";
 import { prisma } from "../../lib/prisma";
 
 type CampaignListItem = Awaited<ReturnType<typeof campaignEngine.listCampaignsForUser>>[number];
@@ -106,7 +107,7 @@ const createCampaignSchema = z.object({
     .optional(),
 });
 
-campaignsRouter.post("/", requireUser, async (req, res, next) => {
+campaignsRouter.post("/", requireUser, campaignCreationRateLimiter, async (req, res, next) => {
   try {
     if (!req.currentUser) {
       res.status(401).json({ error: "Unauthorized" });
@@ -173,7 +174,7 @@ const scheduleSchema = z.object({
   startAt: z.string().datetime(),
 });
 
-campaignsRouter.post("/:campaignId/schedule", requireUser, async (req, res, next) => {
+campaignsRouter.post("/:campaignId/schedule", requireUser, campaignStartRateLimiter, async (req, res, next) => {
   try {
     if (!req.currentUser) {
       res.status(401).json({ error: "Unauthorized" });

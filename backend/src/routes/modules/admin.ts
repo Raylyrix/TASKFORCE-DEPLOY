@@ -6,12 +6,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAdmin } from "../../middleware/adminAuth";
+import { adminRateLimiter } from "../../middleware/rateLimiter";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
 import { dataRetentionService } from "../../services/dataRetentionService";
 import { CampaignStatus, MessageStatus, RecipientStatus } from "@prisma/client";
 
 export const adminRouter = Router();
+
+// Apply stricter rate limiting to admin endpoints
+adminRouter.use(adminRateLimiter);
 
 // Simple in-memory cache for metrics to prevent server overload
 interface MetricsCache {

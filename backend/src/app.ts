@@ -3,7 +3,7 @@ import express from "express";
 
 import { AppConfig } from "./config/env";
 import { logger } from "./lib/logger";
-// import { rateLimit } from "./middleware/rateLimit"; // Disabled for now
+import { generalRateLimiter } from "./middleware/rateLimiter";
 import { healthCheck, readinessCheck, livenessCheck } from "./middleware/healthCheck";
 import { securityHeaders, xssProtection, requestSizeLimit, requestId } from "./middleware/security";
 import { auditLogger } from "./middleware/auditLog";
@@ -70,8 +70,8 @@ export const createApp = () => {
   app.use(xssProtection); // XSS protection
   app.use(requestSizeLimit); // Request size limiting
 
-  // Redis-based rate limiting - DISABLED FOR NOW
-  // app.use(rateLimit);
+  // Rate limiting to prevent API abuse and server overload
+  app.use("/api", generalRateLimiter);
 
   // Audit logging for all requests
   app.use(auditLogger);
