@@ -8,13 +8,19 @@ import { logger } from "../lib/logger";
 
 /**
  * General API rate limiter
- * 100 requests per 15 minutes per IP
+ * 1000 requests per 15 minutes per IP (increased from 100 for normal usage)
+ * This is generous for normal users but still protects against abuse
  */
 export const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: 1000, // Limit each IP to 1000 requests per window
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for health checks and public endpoints
+    const skipPaths = ["/health", "/ready", "/live", "/book/", "/campaigns/unsubscribe"];
+    return skipPaths.some(path => req.path.startsWith(path));
+  },
   handler: (req, res) => {
     logger.warn(
       { ip: req.ip, path: req.path },
@@ -22,7 +28,7 @@ export const generalRateLimiter = rateLimit({
     );
     res.status(429).json({
       error: "Too many requests",
-      message: "Please slow down. Try again in 15 minutes.",
+      message: "Please slow down. Try again in a few minutes.",
     });
   },
 });
@@ -50,11 +56,11 @@ export const adminRateLimiter = rateLimit({
 
 /**
  * Campaign creation rate limiter
- * 20 campaigns per hour per user
+ * 100 campaigns per hour per user (increased for heavy users)
  */
 export const campaignCreationRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // Limit to 20 campaign creations per hour
+  max: 100, // Limit to 100 campaign creations per hour
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -69,18 +75,18 @@ export const campaignCreationRateLimiter = rateLimit({
     );
     res.status(429).json({
       error: "Too many campaigns created",
-      message: "You can only create 20 campaigns per hour. Please try again later.",
+      message: "You can only create 100 campaigns per hour. Please try again later.",
     });
   },
 });
 
 /**
  * Email sending rate limiter
- * 10 requests per minute for starting campaigns
+ * 50 requests per minute for starting campaigns
  */
 export const campaignStartRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit to 10 campaign starts per minute
+  max: 50, // Limit to 50 campaign starts per minute
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -94,7 +100,7 @@ export const campaignStartRateLimiter = rateLimit({
     );
     res.status(429).json({
       error: "Too many campaign starts",
-      message: "You can only start 10 campaigns per minute. Please wait and try again.",
+      message: "You can only start 50 campaigns per minute. Please wait and try again.",
     });
   },
 });
