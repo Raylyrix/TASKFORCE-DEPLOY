@@ -30,11 +30,14 @@ const configureDatabaseUrl = (url: string): string => {
     urlObj.searchParams.set("statement_cache_size", "0"); // Disable statement cache to reduce memory
     
     const configuredUrl = urlObj.toString();
-    logger.info("Database connection pool configured", {
-      connection_limit: 40,
-      pool_timeout: 20,
-      connect_timeout: 10,
-    });
+    logger.info(
+      {
+        connection_limit: 40,
+        pool_timeout: 20,
+        connect_timeout: 10,
+      },
+      "Database connection pool configured"
+    );
     
     return configuredUrl;
   } catch (error) {
