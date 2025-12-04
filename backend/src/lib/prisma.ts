@@ -1,26 +1,55 @@
 import { PrismaClient } from "@prisma/client";
 
 import { AppConfig } from "../config/env";
+import { logger } from "./logger";
 
 const prismaGlobal = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
 
+/**
+ * Configure database URL with connection pool parameters
+ * Railway Pro plan allows ~100-200 connections total
+ * With 2 instances, each should use ~40-50 connections max
+ */
+const configureDatabaseUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    
+    // Check if connection pool params already exist
+    if (urlObj.searchParams.has("connection_limit")) {
+      return url; // Already configured
+    }
+
+    // Add connection pool parameters
+    // Railway Pro: ~100-200 max connections
+    // With 2 instances: 40 connections per instance = 80 total (safe margin)
+    urlObj.searchParams.set("connection_limit", "40");
+    urlObj.searchParams.set("pool_timeout", "20"); // 20 seconds to get connection from pool
+    urlObj.searchParams.set("connect_timeout", "10"); // 10 seconds to establish connection
+    urlObj.searchParams.set("statement_cache_size", "0"); // Disable statement cache to reduce memory
+    
+    const configuredUrl = urlObj.toString();
+    logger.info("Database connection pool configured", {
+      connection_limit: 40,
+      pool_timeout: 20,
+      connect_timeout: 10,
+    });
+    
+    return configuredUrl;
+  } catch (error) {
+    logger.error({ error }, "Failed to configure database URL, using original");
+    return url;
+  }
+};
+
 const createClient = () => {
-  // For production with thousands of users:
-  // Configure connection pool in DATABASE_URL:
-  // Format: postgresql://user:pass@host:port/db?connection_limit=100&pool_timeout=20&connect_timeout=10
-  // 
-  // Recommended settings for 1000+ concurrent users:
-  // - connection_limit: 100-200 (depends on database server capacity)
-  // - pool_timeout: 20 seconds
-  // - connect_timeout: 10 seconds
-  //
-  // For horizontal scaling, each instance should have its own connection pool
+  const databaseUrl = configureDatabaseUrl(AppConfig.databaseUrl);
+  
   return new PrismaClient({
     datasources: {
       db: {
-        url: AppConfig.databaseUrl,
+        url: databaseUrl,
       },
     },
     log:
