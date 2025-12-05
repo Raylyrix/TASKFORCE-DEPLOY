@@ -1,87 +1,130 @@
-# Rate Limit Issue - Fixed
+# ⚠️ URGENT RATE LIMIT FIX
 
-## Problem
-The rate limit was showing 10,000 requests even before starting the app. This was caused by **stale Redis keys** from previous sessions that weren't expiring properly.
+## Problem Identified
 
-## Root Causes
-1. **Stale Redis Keys**: Old rate limit keys (`rate_limit:${ip}`) were persisting in Redis and not expiring correctly
-2. **No Window-Based Keys**: All requests used the same key, so old high values would persist indefinitely
-3. **Check-Before-Increment Logic**: The old code checked limits before incrementing, which could cause race conditions
+**Rate limits were TOO STRICT** and blocking legitimate users!
 
-## Solution Implemented
+### What was happening:
+- `/campaigns` endpoint was being hit repeatedly
+- Rate limit: 100 requests per 15 minutes
+- **Real users were being blocked**
+- Logs showed hundreds of "Rate limit exceeded" messages per minute
 
-### 1. Sliding Window Algorithm
-Changed from a simple counter to a **sliding window** approach:
-- Keys now include timestamp: `rate_limit:${ip}:${windowStart}`
-- Each 60-second window gets its own key
-- Keys automatically expire after the window + 10 seconds
-- Old windows are automatically cleaned up
+### Will Campaigns Be Affected?
 
-### 2. Fixed Increment Logic
-- Now uses `INCR` which atomically increments and returns the new value
-- Check happens AFTER increment (more accurate)
-- Expiration is set only on first request in window
+**NO - Campaigns are 100% SAFE!** ✅
 
-### 3. Clear Stale Keys
-- Created `clearRateLimits.ts` script to manually clear old keys
-- Added optional startup cleanup via `CLEAR_RATE_LIMITS_ON_STARTUP=true`
-- Cleared existing stale keys (found 1 key that was causing the issue)
+**Why:**
+- Campaign **email sending** happens through **BullMQ queue workers**
+- Workers process jobs from Redis queue, **NOT via HTTP API**
+- Rate limiting only affects **HTTP API endpoints**
+- Sending process is **completely independent** of rate limits
 
-## How to Use
+**What IS affected:**
+- Users accessing the dashboard
+- Creating/viewing campaigns via UI
+- Admin panel access
+- Any HTTP API calls
 
-### Clear Rate Limits Manually
-```bash
-cd backend
-npm run clear-rate-limits
-```
+---
 
-### Auto-Clear on Startup
-Add to your `.env` file:
-```env
-CLEAR_RATE_LIMITS_ON_STARTUP=true
-```
+## Fix Applied
 
-### Disable Rate Limiting (Development Only)
-Add to your `.env` file:
-```env
-DISABLE_RATE_LIMIT=true
-```
-
-## Testing
-After the fix:
-1. ✅ Cleared 1 stale rate limit key from Redis
-2. ✅ New requests will use window-based keys that auto-expire
-3. ✅ Rate limiting now works correctly with proper sliding window
-
-## Technical Details
-
-### Old Algorithm (Problematic)
+### Before:
 ```typescript
-// Single key for all requests
-const key = `rate_limit:${ip}`;
-const count = await redis.get(key) || 0;
-if (count >= limit) { /* reject */ }
-await redis.incr(key); // Key might not expire properly
+max: 100,  // 100 requests per 15 minutes
 ```
 
-### New Algorithm (Fixed)
+### After:
 ```typescript
-// Window-based key that auto-expires
-const windowStart = Math.floor(now / 60);
-const key = `rate_limit:${ip}:${windowStart}`;
-const count = await redis.incr(key); // Atomic increment
-if (count === 1) {
-  await redis.expire(key, 70); // Auto-expire after window
+max: 1000, // 1000 requests per 15 minutes
+
+// Skip rate limiting for:
+skip: (req) => {
+  const skipPaths = [
+    "/health",        // Health checks
+    "/ready",         // Readiness checks
+    "/live",          // Liveness checks
+    "/book/",         // Public booking pages
+    "/campaigns/unsubscribe" // Unsubscribe links
+  ];
+  return skipPaths.some(path => req.path.startsWith(path));
 }
-if (count > limit) { /* reject */ }
 ```
 
-## Benefits
-- ✅ No more stale keys accumulating
-- ✅ Accurate rate limiting per time window
-- ✅ Automatic cleanup of old windows
-- ✅ Better performance (atomic operations)
-- ✅ Prevents false positives from old sessions
+### Updated Limits:
+| Endpoint | Old Limit | New Limit |
+|----------|-----------|-----------|
+| General API | 100/15min | **1000/15min** ✅ |
+| Campaign Creation | 20/hour | **100/hour** ✅ |
+| Campaign Start | 10/min | **50/min** ✅ |
+| Admin API | 30/15min | 30/15min (kept strict) |
+| Auth | 5/15min | 5/15min (kept strict) |
 
+---
 
+## What This Means
 
+### ✅ Safe & Working:
+1. **Campaign email sending** - UNAFFECTED (uses workers, not API)
+2. **Follow-up emails** - UNAFFECTED (uses workers)
+3. **Scheduled emails** - UNAFFECTED (uses workers)
+4. **Email tracking** - UNAFFECTED (uses workers)
+
+### ✅ Now Fixed:
+1. **Dashboard access** - Users can browse freely
+2. **Campaign list** - Can be refreshed without hitting limits
+3. **Admin panel** - Can fetch metrics without issues
+4. **Normal usage** - Won't trigger rate limits
+
+### 🛡️ Still Protected:
+1. **DDoS attacks** - 1000/15min is still protective
+2. **API abuse** - Significantly limits abuse
+3. **Brute force** - Auth endpoints still at 5/15min
+4. **Admin abuse** - Admin endpoints still at 30/15min
+
+---
+
+## Why the Frontend Was Hitting `/campaigns` So Much
+
+Possible reasons:
+1. **Auto-refresh** on dashboard
+2. **Real-time updates** polling
+3. **Multiple browser tabs** open
+4. **Development/testing** activity
+
+With the new limit (1000/15min), this should be fine.
+
+---
+
+## Monitoring
+
+### Check if rate limits are still being hit:
+```bash
+railway logs --service taskforce-backend | grep "Rate limit exceeded"
+```
+
+### What you should see:
+- **Very few** or **zero** rate limit warnings
+- Only if someone is genuinely abusing the API
+
+### If you still see many warnings:
+- Someone might be running a bot/script
+- Check the IP addresses in logs
+- May need to block specific IPs
+
+---
+
+## Summary
+
+**Campaigns are SAFE** - They use background workers, not HTTP API.
+
+**Users are NOW UNBLOCKED** - Rate limits increased 10x.
+
+**Protection still active** - Just more reasonable for real usage.
+
+---
+
+**Deployment Status**: Changes pushed, Railway will deploy in ~3 minutes.
+
+The rate limit warnings should **dramatically decrease** after deployment.

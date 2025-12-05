@@ -1370,13 +1370,40 @@ const processTrackingEvent = async (job: TrackingEventJob) => {
 const createCampaign = async (input: CampaignCreationInput) => {
   await ensureUserHasCredentials(input.userId);
 
+  // CRITICAL: Sanitize template before saving to database
+  // This prevents encoding corruption that can occur after 2-3 campaigns
+  const { sanitizeEmailTemplate, logSanitizationResult } = await import("../utils/templateSanitizer.js");
+  
+  const sanitizationResult = sanitizeEmailTemplate({
+    subject: input.strategy.template.subject,
+    html: input.strategy.template.html,
+    attachments: input.strategy.template.attachments,
+  });
+
+  // Log sanitization result for monitoring
+  logSanitizationResult(sanitizationResult, {
+    userId: input.userId,
+    campaignName: input.name,
+  });
+
+  // Throw error if template is invalid after sanitization
+  if (!sanitizationResult.isValid) {
+    throw new Error(`Template validation failed: ${sanitizationResult.errors.join(', ')}`);
+  }
+
+  // Use sanitized template
+  const sanitizedStrategy = {
+    ...input.strategy,
+    template: sanitizationResult.template,
+  };
+
   const campaign = await prisma.campaign.create({
     data: {
       userId: input.userId,
       sheetSourceId: input.sheetSourceId ?? null,
       name: input.name,
       status: CampaignStatus.DRAFT,
-      sendStrategy: input.strategy,
+      sendStrategy: sanitizedStrategy,
       trackingConfig: {
         trackOpens: input.strategy.trackOpens,
         trackClicks: input.strategy.trackClicks,
@@ -1439,13 +1466,48 @@ const cancelCampaign = async (campaignId: string) => {
 };
 
 const createFollowUpSequence = async (campaignId: string, config: FollowUpSequenceConfig) => {
+  // CRITICAL: Sanitize all follow-up templates before saving
+  const { sanitizeSubject, sanitizeHtml, logSanitizationResult } = await import("../utils/templateSanitizer.js");
+  
+  const sanitizedSteps = config.steps.map((step, index) => {
+    // Sanitize subject
+    const subjectResult = sanitizeSubject(step.subject);
+    if (!subjectResult.isValid) {
+      throw new Error(`Follow-up step ${index + 1} subject validation failed: ${subjectResult.errors.join(', ')}`);
+    }
+
+    // Sanitize HTML
+    const htmlResult = sanitizeHtml(step.html);
+    if (!htmlResult.isValid) {
+      throw new Error(`Follow-up step ${index + 1} HTML validation failed: ${htmlResult.errors.join(', ')}`);
+    }
+
+    // Log warnings if any
+    if (subjectResult.warnings.length > 0 || htmlResult.warnings.length > 0) {
+      logger.warn(
+        {
+          campaignId,
+          followUpStepIndex: index,
+          warnings: [...subjectResult.warnings, ...htmlResult.warnings],
+        },
+        'Follow-up template sanitization warnings'
+      );
+    }
+
+    return {
+      ...step,
+      subject: subjectResult.sanitized,
+      html: htmlResult.sanitized,
+    };
+  });
+
   const sequence = await prisma.followUpSequence.create({
     data: {
       campaignId,
       name: config.name,
       settings: {},
       steps: {
-        create: config.steps.map((step, index) => ({
+        create: sanitizedSteps.map((step, index) => ({
           order: index,
           offsetConfig: {
             // Only include delayMs if it's a valid number (not undefined, not null, >= 0)

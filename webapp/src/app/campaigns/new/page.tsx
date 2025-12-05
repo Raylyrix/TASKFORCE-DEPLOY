@@ -274,6 +274,23 @@ export default function NewCampaignPage() {
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
       
+      // CRITICAL: Validate and clean templates before sending to backend
+      const { validateEmailTemplate, cleanTemplateInput } = await import('@/utils/templateValidation');
+      
+      const cleanedSubject = cleanTemplateInput(subjectTemplate);
+      const cleanedBody = cleanTemplateInput(bodyTemplate);
+      
+      const validationResult = validateEmailTemplate(cleanedSubject, cleanedBody);
+      
+      if (!validationResult.isValid) {
+        throw new Error(`Template validation failed:\n${validationResult.errors.join('\n')}`);
+      }
+      
+      // Show warnings to user (non-blocking)
+      if (validationResult.warnings.length > 0) {
+        console.warn('Template warnings:', validationResult.warnings);
+      }
+      
       if (!importResult || !emailField) {
         newErrors.audience = "Please import and select an email column from your sheet.";
       }
@@ -320,8 +337,8 @@ export default function NewCampaignPage() {
           trackOpens,
           trackClicks,
           template: {
-            subject: subjectTemplate.trim(),
-            html: bodyTemplate.trim(),
+            subject: cleanedSubject, // Use cleaned template
+            html: cleanedBody, // Use cleaned template
             attachments: attachments.map((att) => ({
               filename: att.filename,
               content: att.content,

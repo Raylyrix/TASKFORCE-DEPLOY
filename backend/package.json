@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "clean-templates": "tsx src/scripts/cleanCorruptedTemplates.ts",
     "test": "echo \"No tests defined\" && exit 0"
   },
   "keywords": [],
