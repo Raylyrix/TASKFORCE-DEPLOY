@@ -544,6 +544,32 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     throw new Error("Recipient or campaign not found");
   }
 
+  // CRITICAL: Prevent duplicate sends - check if already sent
+  if (recipient.status === RecipientStatus.SENT) {
+    logger.info(
+      { campaignId: recipient.campaign.id, recipientId: recipient.id, status: recipient.status },
+      "Skipping: Recipient already marked as SENT (duplicate prevention)"
+    );
+    return;
+  }
+
+  // CRITICAL: Check campaign status - don't send if paused or cancelled
+  if (recipient.campaign.status === CampaignStatus.PAUSED) {
+    logger.info(
+      { campaignId: recipient.campaign.id, recipientId: recipient.id, status: recipient.campaign.status },
+      "Skipping: Campaign is PAUSED"
+    );
+    return;
+  }
+
+  if (recipient.campaign.status === CampaignStatus.CANCELLED) {
+    logger.info(
+      { campaignId: recipient.campaign.id, recipientId: recipient.id, status: recipient.campaign.status },
+      "Skipping: Campaign is CANCELLED"
+    );
+    return;
+  }
+
   const strategy = recipient.campaign.sendStrategy as SendStrategy;
   const payload = recipient.payload as RecipientRecord;
 
@@ -918,6 +944,32 @@ const processFollowUpDispatch = async (job: FollowUpDispatchJob) => {
 
   if (!step) {
     throw new Error("Follow-up step not found");
+  }
+
+  // CRITICAL: Check if campaign was cancelled - don't send follow-ups for cancelled campaigns
+  if (step.sequence?.campaign?.status === CampaignStatus.CANCELLED) {
+    logger.info(
+      { campaignId: step.sequence.campaignId, followUpStepId: step.id },
+      "Skipping follow-up: Campaign was CANCELLED"
+    );
+    return;
+  }
+
+  // CRITICAL: Check if this follow-up was already sent (duplicate prevention)
+  const existingMessage = await prisma.messageLog.findFirst({
+    where: {
+      campaignRecipientId: job.recipientId,
+      followUpStepId: job.followUpStepId,
+      status: MessageStatus.SENT,
+    },
+  });
+
+  if (existingMessage) {
+    logger.info(
+      { recipientId: job.recipientId, followUpStepId: job.followUpStepId, existingMessageId: existingMessage.id },
+      "Skipping follow-up: Already sent for this recipient (duplicate prevention)"
+    );
+    return;
   }
 
   // Read offsetConfig to check if this is a nested follow-up
@@ -1466,6 +1518,50 @@ const pauseCampaign = async (campaignId: string) => {
       status: CampaignStatus.PAUSED,
     },
   });
+
+  // CRITICAL: Remove pending jobs from queue to prevent them from executing
+  // Get all pending jobs (delayed and waiting)
+  const campaignJobs = await campaignQueue.getJobs(['delayed', 'waiting']);
+  const followUpJobs = await followUpQueue.getJobs(['delayed', 'waiting']);
+
+  let removedCampaignJobs = 0;
+  let removedFollowUpJobs = 0;
+
+  // Remove campaign jobs for this campaign
+  for (const job of campaignJobs) {
+    if (job.data.campaignId === campaignId) {
+      await job.remove();
+      removedCampaignJobs++;
+    }
+  }
+
+  // Remove follow-up jobs for this campaign
+  for (const job of followUpJobs) {
+    // Follow-up jobs have followUpSequenceId, we need to match it to campaign
+    const followUpData = job.data as { followUpSequenceId?: string; recipientId?: string };
+    if (followUpData.followUpSequenceId) {
+      // Check if this sequence belongs to the paused campaign
+      const sequence = await prisma.followUpSequence.findUnique({
+        where: { id: followUpData.followUpSequenceId },
+        select: { campaignId: true },
+      });
+      
+      if (sequence?.campaignId === campaignId) {
+        await job.remove();
+        removedFollowUpJobs++;
+      }
+    }
+  }
+
+  logger.info(
+    { 
+      campaignId, 
+      removedCampaignJobs, 
+      removedFollowUpJobs,
+      totalRemoved: removedCampaignJobs + removedFollowUpJobs
+    },
+    "Campaign paused and pending queue jobs removed"
+  );
 };
 
 const cancelCampaign = async (campaignId: string) => {
@@ -1475,6 +1571,47 @@ const cancelCampaign = async (campaignId: string) => {
       status: CampaignStatus.CANCELLED,
     },
   });
+
+  // CRITICAL: Remove ALL pending jobs from queues (same as pause, but for cancel)
+  const campaignJobs = await campaignQueue.getJobs(['delayed', 'waiting']);
+  const followUpJobs = await followUpQueue.getJobs(['delayed', 'waiting']);
+
+  let removedCampaignJobs = 0;
+  let removedFollowUpJobs = 0;
+
+  // Remove campaign jobs
+  for (const job of campaignJobs) {
+    if (job.data.campaignId === campaignId) {
+      await job.remove();
+      removedCampaignJobs++;
+    }
+  }
+
+  // Remove follow-up jobs
+  for (const job of followUpJobs) {
+    const followUpData = job.data as { followUpSequenceId?: string };
+    if (followUpData.followUpSequenceId) {
+      const sequence = await prisma.followUpSequence.findUnique({
+        where: { id: followUpData.followUpSequenceId },
+        select: { campaignId: true },
+      });
+      
+      if (sequence?.campaignId === campaignId) {
+        await job.remove();
+        removedFollowUpJobs++;
+      }
+    }
+  }
+
+  logger.info(
+    { 
+      campaignId, 
+      removedCampaignJobs, 
+      removedFollowUpJobs,
+      totalRemoved: removedCampaignJobs + removedFollowUpJobs
+    },
+    "Campaign cancelled and all pending queue jobs removed"
+  );
 };
 
 const createFollowUpSequence = async (campaignId: string, config: FollowUpSequenceConfig) => {
