@@ -72,26 +72,22 @@ export function sanitizeSubject(subject: string | null | undefined): TemplateVal
     sanitized = sanitized.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
   }
 
-  // Step 5: Check for accidental URL encoding (like %P, %20 in wrong context)
-  const urlEncodingPattern = /%[0-9A-F]{2}/gi;
-  if (urlEncodingPattern.test(sanitized)) {
-    warnings.push('Possible URL encoding detected - cleaning');
-    sanitized = sanitized.replace(/%([0-9A-F]{2})(?![0-9A-F]|[\w-]|&)/gi, (match, hex, offset, str) => {
-      const before = offset > 0 ? str[offset - 1] : '';
-      const after = offset + match.length < str.length ? str[offset + match.length] : '';
-      
-      // Skip if it's part of a URL or HTML entity
-      if (before.match(/[:/=&?]/) || after.match(/[0-9A-Fa-f]/)) {
-        return match;
-      }
-      
-      const charCode = parseInt(hex, 16);
-      if (charCode >= 32 && charCode <= 126 && charCode !== 37) {
-        return String.fromCharCode(charCode);
-      }
-      return match;
+  // Step 5: Check for corrupted single-letter URL encoding ONLY (like %P, %Q from corruption)
+  // DO NOT touch valid hex pairs like %50, %20, %45 - those could be legitimate (e.g., "Get %50 off")
+  // This pattern matches %P, %Q, %Z etc. but NOT %50, %20, %45
+  const corruptedEncodingPattern = /%([A-F])(?![0-9A-Fa-f])/gi;
+  if (corruptedEncodingPattern.test(sanitized)) {
+    warnings.push('Corrupted single-letter URL encoding detected - cleaning');
+    sanitized = sanitized.replace(corruptedEncodingPattern, (match, letter) => {
+      // Just keep the letter, remove the %
+      // %P → P, %Q → Q, etc.
+      return letter;
     });
   }
+  
+  // Also check for other obvious corruption: %% or % followed by non-hex
+  sanitized = sanitized.replace(/%%/g, '%'); // Double % is corruption
+  sanitized = sanitized.replace(/%(?![0-9A-Fa-f]{2}|[A-Fa-f](?![0-9A-Fa-f]))/g, ''); // % not followed by valid pattern
 
   // Step 6: Trim and validate final result
   sanitized = sanitized.trim();

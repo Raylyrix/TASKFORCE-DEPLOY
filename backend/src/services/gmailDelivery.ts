@@ -89,25 +89,17 @@ const cleanSubjectEncoding = (subject: string): string => {
   // Remove any remaining control characters and non-printable characters except spaces
   decoded = decoded.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
   
-  // Remove any URL-encoded characters that shouldn't be there (%P, %20, etc. in wrong context)
-  // Only decode if it looks like accidental URL encoding (not part of a URL or HTML entity)
-  decoded = decoded.replace(/%([0-9A-F]{2})(?![0-9A-F]|[\w-]|&)/gi, (match, hex, offset, str) => {
-    // Check if this is likely accidental encoding (not part of a URL or HTML entity)
-    const before = offset > 0 ? str[offset - 1] : '';
-    const after = offset + match.length < str.length ? str[offset + match.length] : '';
-    
-    // Skip if it's part of a URL (preceded by :, /, ?, =, &) or followed by hex digit
-    if (before.match(/[:/=&?]/) || after.match(/[0-9A-Fa-f]/)) {
-      return match;
-    }
-    
-    const charCode = parseInt(hex, 16);
-    // Only decode if it's a printable ASCII character (not % itself)
-    if (charCode >= 32 && charCode <= 126 && charCode !== 37) { // 37 is '%'
-      return String.fromCharCode(charCode);
-    }
-    return match;
+  // Remove corrupted single-letter URL encoding ONLY (like %P, %Q from corruption)
+  // DO NOT touch valid hex pairs like %50, %20, %45 - those could be legitimate
+  const corruptedEncodingPattern = /%([A-F])(?![0-9A-Fa-f])/gi;
+  decoded = decoded.replace(corruptedEncodingPattern, (match, letter) => {
+    // Just keep the letter, remove the %
+    return letter;
   });
+  
+  // Also clean up obvious corruption patterns
+  decoded = decoded.replace(/%%/g, '%'); // Double % is corruption
+  decoded = decoded.replace(/%(?![0-9A-Fa-f]{2}|[A-Fa-f](?![0-9A-Fa-f]))/g, ''); // % not followed by valid pattern
   
   return decoded.trim();
 };

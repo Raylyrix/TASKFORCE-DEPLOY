@@ -135,26 +135,18 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
   cleanedTemplate = cleanedTemplate.replace(/=\?[^?]*\?[^?]*\?[^?=]*$/gm, '');
   cleanedTemplate = cleanedTemplate.replace(/^[^?=]*\?[^?]*\?[^?]*\?=/gm, '');
   
-  // Remove any accidental URL encoding in templates (like %P, %20 in wrong context)
-  // Only decode if it's clearly accidental (not part of a merge field, HTML entity, or URL)
-  // We'll be conservative and only decode if it's not preceded by % or & and not followed by valid URL chars
-  cleanedTemplate = cleanedTemplate.replace(/%([0-9A-F]{2})(?![0-9A-F]|[\w-]|&)/gi, (match, hex, offset, str) => {
-    // Check if this is likely accidental encoding (not part of a URL or HTML entity)
-    const before = offset > 0 ? str[offset - 1] : '';
-    const after = offset + match.length < str.length ? str[offset + match.length] : '';
-    
-    // Skip if it's part of a URL (preceded by :, /, ?, =, &) or HTML entity (preceded by &)
-    if (before.match(/[:/=&?]/) || after.match(/[0-9A-Fa-f]/)) {
-      return match;
-    }
-    
-    const charCode = parseInt(hex, 16);
-    // Only decode if it's a printable ASCII character
-    if (charCode >= 32 && charCode <= 126 && charCode !== 37) { // 37 is '%'
-      return String.fromCharCode(charCode);
-    }
-    return match;
-  });
+  // Remove corrupted single-letter URL encoding ONLY (like %P, %Q from corruption)
+  // DO NOT touch valid hex pairs like %50, %20, %45 - those could be legitimate
+  const corruptedEncodingPattern = /%([A-F])(?![0-9A-Fa-f])/gi;
+  if (corruptedEncodingPattern.test(cleanedTemplate)) {
+    cleanedTemplate = cleanedTemplate.replace(corruptedEncodingPattern, (match, letter) => {
+      return letter; // Just keep the letter, remove the %
+    });
+  }
+  
+  // Clean up obvious corruption patterns
+  cleanedTemplate = cleanedTemplate.replace(/%%/g, '%'); // Double % is corruption
+  cleanedTemplate = cleanedTemplate.replace(/%(?![0-9A-Fa-f]{2}|[A-Fa-f](?![0-9A-Fa-f]))/g, ''); // % not followed by valid pattern
   
   // Log available data keys for debugging
   const availableKeys = Object.keys(data || {});
