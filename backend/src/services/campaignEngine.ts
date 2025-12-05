@@ -662,7 +662,7 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
   const messageContent = createMessageForRecipient(sanitizedStrategy, payload, tracking);
 
   // Final validation of rendered subject
-  const finalSubject = messageContent.subject.trim();
+  let finalSubject = messageContent.subject.trim();
   if (!finalSubject || finalSubject.length === 0) {
     logger.error(
       { campaignId: recipient.campaign.id, recipientId: recipient.id, renderedSubject: messageContent.subject },
@@ -670,6 +670,26 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     );
     throw new Error("Email subject is empty after template rendering. Please check your campaign template.");
   }
+
+  // AUTO-HEAL: Clean subject line to fix any encoding corruption before sending
+  // This ensures even if corrupted templates are in database, we send clean emails
+  const { sanitizeSubject } = await import("../utils/templateSanitizer.js");
+  const subjectSanitizationResult = sanitizeSubject(finalSubject);
+  
+  if (subjectSanitizationResult.warnings.length > 0) {
+    logger.warn(
+      {
+        campaignId: recipient.campaign.id,
+        recipientId: recipient.id,
+        warnings: subjectSanitizationResult.warnings,
+        originalSubject: finalSubject.substring(0, 100),
+        healedSubject: subjectSanitizationResult.sanitized.substring(0, 100),
+      },
+      "AUTO-HEALED: Corrupted subject detected and fixed before sending"
+    );
+  }
+  
+  finalSubject = subjectSanitizationResult.sanitized;
 
   // Clean subject line to avoid spam triggers
   let cleanSubject = finalSubject.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
@@ -1403,7 +1423,7 @@ const createCampaign = async (input: CampaignCreationInput) => {
       sheetSourceId: input.sheetSourceId ?? null,
       name: input.name,
       status: CampaignStatus.DRAFT,
-      sendStrategy: sanitizedStrategy,
+      sendStrategy: sanitizedStrategy as any, // Type assertion needed for complex nested types
       trackingConfig: {
         trackOpens: input.strategy.trackOpens,
         trackClicks: input.strategy.trackClicks,

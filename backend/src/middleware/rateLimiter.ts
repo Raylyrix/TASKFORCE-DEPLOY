@@ -8,12 +8,12 @@ import { logger } from "../lib/logger";
 
 /**
  * General API rate limiter
- * 1000 requests per 15 minutes per IP (increased from 100 for normal usage)
- * This is generous for normal users but still protects against abuse
+ * 5000 requests per 15 minutes per IP (increased from 1000 due to high legitimate traffic)
+ * This is generous for power users but still protects against abuse
  */
 export const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Limit each IP to 1000 requests per window
+  max: 5000, // Limit each IP to 5000 requests per window
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req) => {
