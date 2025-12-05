@@ -116,8 +116,45 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
     return "";
   }
   
-  // Clean the template - remove any non-printable characters except newlines and tabs
-  const cleanedTemplate = template.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "");
+  // First, ensure the template is valid UTF-8
+  let cleanedTemplate: string;
+  try {
+    // Try to fix any encoding issues by re-encoding as UTF-8
+    cleanedTemplate = Buffer.from(template, 'utf-8').toString('utf-8');
+  } catch (error) {
+    // If that fails, try to recover by removing invalid bytes
+    logger.warn({ error, template: template.substring(0, 100) }, "Template encoding issue detected, attempting recovery");
+    cleanedTemplate = template.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, "");
+  }
+  
+  // Remove any non-printable characters except newlines, tabs, and carriage returns
+  cleanedTemplate = cleanedTemplate.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "");
+  
+  // Remove any corrupted RFC 2047 encoding that might have leaked into the template
+  // This shouldn't happen, but if it does, clean it up
+  cleanedTemplate = cleanedTemplate.replace(/=\?[^?]*\?[^?]*\?[^?=]*$/gm, '');
+  cleanedTemplate = cleanedTemplate.replace(/^[^?=]*\?[^?]*\?[^?]*\?=/gm, '');
+  
+  // Remove any accidental URL encoding in templates (like %P, %20 in wrong context)
+  // Only decode if it's clearly accidental (not part of a merge field, HTML entity, or URL)
+  // We'll be conservative and only decode if it's not preceded by % or & and not followed by valid URL chars
+  cleanedTemplate = cleanedTemplate.replace(/%([0-9A-F]{2})(?![0-9A-F]|[\w-]|&)/gi, (match, hex, offset, str) => {
+    // Check if this is likely accidental encoding (not part of a URL or HTML entity)
+    const before = offset > 0 ? str[offset - 1] : '';
+    const after = offset + match.length < str.length ? str[offset + match.length] : '';
+    
+    // Skip if it's part of a URL (preceded by :, /, ?, =, &) or HTML entity (preceded by &)
+    if (before.match(/[:/=&?]/) || after.match(/[0-9A-Fa-f]/)) {
+      return match;
+    }
+    
+    const charCode = parseInt(hex, 16);
+    // Only decode if it's a printable ASCII character
+    if (charCode >= 32 && charCode <= 126 && charCode !== 37) { // 37 is '%'
+      return String.fromCharCode(charCode);
+    }
+    return match;
+  });
   
   // Log available data keys for debugging
   const availableKeys = Object.keys(data || {});
@@ -125,7 +162,7 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
     logger.warn({ template: cleanedTemplate.substring(0, 100) }, "No data available for template rendering");
   }
   
-  return cleanedTemplate.replace(/{{\s*([\w.-]+)\s*}}/g, (match, key: string) => {
+  const rendered = cleanedTemplate.replace(/{{\s*([\w.-]+)\s*}}/g, (match, key: string) => {
     const value = data[key];
     // Log missing variables for debugging
     if (value === undefined || value === null) {
@@ -133,10 +170,15 @@ const renderTemplate = (template: string, data: RecipientRecord) => {
     }
     // Return the value if it exists, otherwise return empty string (not the original placeholder)
     if (value !== undefined && value !== null) {
-      return String(value).trim();
+      // Ensure the replacement value is also clean UTF-8
+      const cleanValue = String(value).trim();
+      // Remove any control characters from merge field values
+      return cleanValue.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "");
     }
     return ""; // Return empty string instead of the placeholder
   });
+  
+  return rendered;
 };
 
 // Validate and clean subject line to avoid spam triggers
@@ -522,8 +564,26 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     throw new Error("Campaign sendStrategy is invalid or corrupted. Please recreate the campaign.");
   }
 
-  // Sanitize subject template - ensure it's a clean string
-  const subjectTemplate = String(strategy.template.subject || "").trim();
+  // Sanitize subject template - ensure it's a clean string and fix any encoding issues
+  let subjectTemplate = String(strategy.template.subject || "").trim();
+  
+  // Fix any encoding corruption that might have occurred
+  try {
+    // Ensure valid UTF-8 encoding
+    subjectTemplate = Buffer.from(subjectTemplate, 'utf-8').toString('utf-8');
+    // Remove any corrupted RFC 2047 encoding patterns
+    subjectTemplate = subjectTemplate.replace(/=\?[^?]*\?[^?]*\?[^?=]*$/g, '');
+    subjectTemplate = subjectTemplate.replace(/^[^?=]*\?[^?]*\?[^?]*\?=/g, '');
+    // Remove control characters
+    subjectTemplate = subjectTemplate.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  } catch (error) {
+    logger.warn(
+      { error, campaignId: recipient.campaign.id, originalSubject: strategy.template.subject?.substring(0, 100) },
+      "Error cleaning subject template, using fallback"
+    );
+    subjectTemplate = String(strategy.template.subject || "").replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  }
+  
   if (!subjectTemplate || subjectTemplate.length === 0) {
     logger.error(
       { campaignId: recipient.campaign.id, recipientId: recipient.id },
@@ -532,8 +592,26 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     throw new Error("Campaign subject template is empty. Please update the campaign.");
   }
 
-  // Sanitize HTML template
-  const htmlTemplate = String(strategy.template.html || "").trim();
+  // Sanitize HTML template - ensure it's a clean string and fix any encoding issues
+  let htmlTemplate = String(strategy.template.html || "").trim();
+  
+  // Fix any encoding corruption that might have occurred
+  try {
+    // Ensure valid UTF-8 encoding
+    htmlTemplate = Buffer.from(htmlTemplate, 'utf-8').toString('utf-8');
+    // Remove any corrupted RFC 2047 encoding patterns
+    htmlTemplate = htmlTemplate.replace(/=\?[^?]*\?[^?]*\?[^?=]*$/gm, '');
+    htmlTemplate = htmlTemplate.replace(/^[^?=]*\?[^?]*\?[^?]*\?=/gm, '');
+    // Remove control characters (but preserve newlines and tabs for HTML)
+    htmlTemplate = htmlTemplate.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  } catch (error) {
+    logger.warn(
+      { error, campaignId: recipient.campaign.id },
+      "Error cleaning HTML template, using fallback"
+    );
+    htmlTemplate = String(strategy.template.html || "").replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "").trim();
+  }
+  
   if (!htmlTemplate || htmlTemplate.length === 0) {
     logger.error(
       { campaignId: recipient.campaign.id, recipientId: recipient.id },

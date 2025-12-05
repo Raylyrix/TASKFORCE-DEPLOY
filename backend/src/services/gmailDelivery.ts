@@ -41,26 +41,116 @@ const toBase64Url = (input: string) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
+// Clean and decode any corrupted or double-encoded subject lines
+const cleanSubjectEncoding = (subject: string): string => {
+  if (!subject || typeof subject !== 'string') {
+    return '';
+  }
+  
+  // Remove any corrupted RFC 2047 encoding patterns that might cause issues
+  // Pattern: =?charset?encoding?text?= (but handle malformed ones)
+  let cleaned = subject;
+  
+  // Remove any malformed encoding patterns (e.g., incomplete =?UTF-8?B?...)
+  cleaned = cleaned.replace(/=\?[^?]*\?[^?]*\?[^?=]*$/g, '');
+  cleaned = cleaned.replace(/^[^?=]*\?[^?]*\?[^?]*\?=/g, '');
+  
+  // Try to decode if it's already RFC 2047 encoded
+  // Pattern: =?charset?B?base64?= or =?charset?Q?quoted-printable?=
+  const rfc2047Pattern = /=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi;
+  let decoded = cleaned;
+  let match;
+  let hasEncoded = false;
+  
+  while ((match = rfc2047Pattern.exec(cleaned)) !== null) {
+    hasEncoded = true;
+    try {
+      const charset = match[1].toUpperCase();
+      const encoding = match[2].toUpperCase();
+      const encodedText = match[3];
+      
+      if (encoding === 'B' && charset === 'UTF-8') {
+        // Base64 decode
+        const decodedText = Buffer.from(encodedText, 'base64').toString('utf-8');
+        decoded = decoded.replace(match[0], decodedText);
+      } else if (encoding === 'Q' && charset === 'UTF-8') {
+        // Quoted-printable decode (simplified)
+        const decodedText = encodedText.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (_, hex) => {
+          return String.fromCharCode(parseInt(hex, 16));
+        });
+        decoded = decoded.replace(match[0], decodedText);
+      }
+    } catch (error) {
+      // If decoding fails, keep the original
+      logger.warn({ error, subject: cleaned.substring(0, 100) }, 'Failed to decode RFC 2047 subject');
+    }
+  }
+  
+  // Remove any remaining control characters and non-printable characters except spaces
+  decoded = decoded.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // Remove any URL-encoded characters that shouldn't be there (%P, %20, etc. in wrong context)
+  // Only decode if it looks like accidental URL encoding (not part of a URL or HTML entity)
+  decoded = decoded.replace(/%([0-9A-F]{2})(?![0-9A-F]|[\w-]|&)/gi, (match, hex, offset, str) => {
+    // Check if this is likely accidental encoding (not part of a URL or HTML entity)
+    const before = offset > 0 ? str[offset - 1] : '';
+    const after = offset + match.length < str.length ? str[offset + match.length] : '';
+    
+    // Skip if it's part of a URL (preceded by :, /, ?, =, &) or followed by hex digit
+    if (before.match(/[:/=&?]/) || after.match(/[0-9A-Fa-f]/)) {
+      return match;
+    }
+    
+    const charCode = parseInt(hex, 16);
+    // Only decode if it's a printable ASCII character (not % itself)
+    if (charCode >= 32 && charCode <= 126 && charCode !== 37) { // 37 is '%'
+      return String.fromCharCode(charCode);
+    }
+    return match;
+  });
+  
+  return decoded.trim();
+};
+
 // Encode subject line for RFC 2047 (handles non-ASCII characters like bullets, emojis, etc.)
 const encodeSubject = (subject: string): string => {
+  if (!subject || typeof subject !== 'string') {
+    return '';
+  }
+  
+  // First, clean any corrupted encoding
+  const cleaned = cleanSubjectEncoding(subject);
+  
+  // Check if subject is already RFC 2047 encoded (after cleaning)
+  const alreadyEncoded = /=\?[^?]+\?[BQ]\?[^?]+\?=/i.test(cleaned);
+  if (alreadyEncoded) {
+    // Already encoded, return as-is (but cleaned)
+    return cleaned;
+  }
+  
   // Check if subject contains non-ASCII characters
-  const hasNonAscii = /[^\x00-\x7F]/.test(subject);
+  const hasNonAscii = /[^\x00-\x7F]/.test(cleaned);
   
   if (!hasNonAscii) {
-    return subject;
+    return cleaned;
   }
   
   // Encode using RFC 2047 format: =?charset?encoding?encoded-text?=
   // Use UTF-8 and base64 encoding
-  const encoded = Buffer.from(subject, 'utf-8').toString('base64');
-  // Split into chunks of 75 characters (RFC 2047 limit per encoded-word)
-  const chunks: string[] = [];
-  for (let i = 0; i < encoded.length; i += 75) {
-    chunks.push(encoded.slice(i, i + 75));
+  try {
+    const encoded = Buffer.from(cleaned, 'utf-8').toString('base64');
+    // Split into chunks of 75 characters (RFC 2047 limit per encoded-word)
+    const chunks: string[] = [];
+    for (let i = 0; i < encoded.length; i += 75) {
+      chunks.push(encoded.slice(i, i + 75));
+    }
+    
+    // Join chunks with spaces and wrap each in =?UTF-8?B?...?=
+    return chunks.map(chunk => `=?UTF-8?B?${chunk}?=`).join(' ');
+  } catch (error) {
+    logger.error({ error, subject: cleaned.substring(0, 100) }, 'Failed to encode subject, returning cleaned version');
+    return cleaned;
   }
-  
-  // Join chunks with spaces and wrap each in =?UTF-8?B?...?=
-  return chunks.map(chunk => `=?UTF-8?B?${chunk}?=`).join(' ');
 };
 
 // Generate a unique Message-ID
