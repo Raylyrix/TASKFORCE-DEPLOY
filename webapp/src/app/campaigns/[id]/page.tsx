@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Layout from "@/components/Layout";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { ArrowLeft, Mail, TrendingUp, Eye, MousePointerClick, XCircle, Users, Plus, Clock } from "lucide-react";
+import { ArrowLeft, Mail, TrendingUp, Eye, MousePointerClick, XCircle, Users, Plus, Clock, Play, Pause, Square } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import FollowUpModal from "@/components/FollowUpModal";
@@ -48,6 +48,48 @@ export default function CampaignDetailsPage() {
     queryFn: () => api.followUps.list(campaignId),
     enabled: !!campaignId,
   });
+
+  const pauseMutation = useMutation({
+    mutationFn: (id: string) => api.campaigns.pause(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: (id: string) => api.campaigns.schedule(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => api.campaigns.cancel(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+
+  const handlePause = () => {
+    if (campaignId) {
+      pauseMutation.mutate(campaignId);
+    }
+  };
+
+  const handleResume = () => {
+    if (campaignId) {
+      resumeMutation.mutate(campaignId);
+    }
+  };
+
+  const handleCancel = () => {
+    if (campaignId && confirm("Are you sure you want to cancel this campaign? This action cannot be undone.")) {
+      cancelMutation.mutate(campaignId);
+    }
+  };
 
   if (campaignLoading || recipientsLoading) {
     return (
@@ -106,8 +148,69 @@ export default function CampaignDetailsPage() {
             <ArrowLeft className="w-5 h-5" />
             Back to Campaigns
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">{campaign.name}</h1>
-          <p className="text-gray-600 mt-1">Campaign Analytics & Management</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{campaign.name}</h1>
+              <p className="text-gray-600 mt-1">Campaign Analytics & Management</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {campaign.status === "RUNNING" && (
+                <>
+                  <button
+                    onClick={handlePause}
+                    disabled={pauseMutation.isPending}
+                    className="px-4 py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Pause Campaign"
+                  >
+                    <Pause className="w-4 h-4" />
+                    {pauseMutation.isPending ? "Pausing..." : "Pause"}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelMutation.isPending}
+                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Cancel Campaign"
+                  >
+                    <Square className="w-4 h-4" />
+                    {cancelMutation.isPending ? "Cancelling..." : "Cancel"}
+                  </button>
+                </>
+              )}
+              {campaign.status === "PAUSED" && (
+                <>
+                  <button
+                    onClick={handleResume}
+                    disabled={resumeMutation.isPending}
+                    className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Resume Campaign"
+                  >
+                    <Play className="w-4 h-4" />
+                    {resumeMutation.isPending ? "Resuming..." : "Resume"}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelMutation.isPending}
+                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Cancel Campaign"
+                  >
+                    <Square className="w-4 h-4" />
+                    {cancelMutation.isPending ? "Cancelling..." : "Cancel"}
+                  </button>
+                </>
+              )}
+              {campaign.status === "SCHEDULED" && (
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelMutation.isPending}
+                  className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  title="Cancel Campaign"
+                >
+                  <Square className="w-4 h-4" />
+                  {cancelMutation.isPending ? "Cancelling..." : "Cancel"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Stats Grid */}

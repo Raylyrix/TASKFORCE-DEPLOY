@@ -213,7 +213,7 @@ function CampaignCard({
             </button>
           )}
 
-          {(campaign.status === "RUNNING" || campaign.status === "PAUSED") && (
+          {(campaign.status === "RUNNING" || campaign.status === "PAUSED" || campaign.status === "SCHEDULED") && (
             <button
               onClick={() => onAction(campaign.id, "cancel")}
               disabled={isLoading}
