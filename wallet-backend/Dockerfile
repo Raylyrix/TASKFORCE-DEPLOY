@@ -11,8 +11,9 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# Generate Prisma client before build
 RUN npx prisma generate
+RUN npm run build
 
 # Production image, copy all the files and run
 FROM base AS runner
@@ -30,7 +31,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Create startup script
 RUN echo '#!/bin/sh' > /app/start.sh && \
