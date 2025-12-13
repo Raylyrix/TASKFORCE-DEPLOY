@@ -210,13 +210,7 @@ export async function settlePayment(paymentId: string): Promise<{
       },
     });
     
-    // 7. Record settlement
-    await prisma.payment.create({
-      data: {
-        // This would be a settlement record
-        // For now, we update the original payment
-      },
-    });
+    // 7. Settlement complete - payment already updated above
     
     logger.info('Payment settled successfully', {
       paymentId,
