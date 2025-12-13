@@ -33,6 +33,8 @@ model User {
   workflows           Workflow[]
   sendingDomains      SendingDomain[]
   campaignFolders     CampaignFolder[]
+  apiKeys             ApiKey[]
+  webhooks            Webhook[]
 
   @@index([email])
   @@index([createdAt])
@@ -813,4 +815,68 @@ enum BounceCategory {
   CONTENT_REJECTED
   BLOCKED
   OTHER
+}
+
+// External API Models
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  userId        String
+  keyHash       String    @unique // Hashed API key (bcrypt/argon2)
+  name          String
+  scopes        String[]  // Array of permission strings
+  rateLimitTier String    @default("free") // free, starter, professional, enterprise
+  ipWhitelist   String[]  // Optional IP addresses
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([keyHash])
+  @@index([isActive])
+  @@index([userId, isActive])
+}
+
+model Webhook {
+  id              String           @id @default(cuid())
+  userId          String
+  url             String
+  events          String[]         // Array of event types
+  secret          String?          // For signature verification
+  isActive        Boolean          @default(true)
+  lastTriggeredAt DateTime?
+  failureCount    Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([userId, isActive])
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String
+  event        String
+  payload      Json
+  status       String   // pending, success, failed
+  statusCode   Int?
+  responseBody String?  @db.Text
+  attempts     Int      @default(0)
+  deliveredAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([webhookId, status])
 }

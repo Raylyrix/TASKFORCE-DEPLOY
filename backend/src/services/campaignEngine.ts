@@ -81,6 +81,7 @@ export type CampaignCreationInput = {
   userId: string;
   name: string;
   sheetSourceId?: string;
+  folderId?: string;
   recipients: Array<{
     email: string;
     payload: RecipientRecord;
@@ -1465,6 +1466,7 @@ const createCampaign = async (input: CampaignCreationInput) => {
     data: {
       userId: input.userId,
       sheetSourceId: input.sheetSourceId ?? null,
+      folderId: input.folderId ?? null,
       name: input.name,
       status: CampaignStatus.DRAFT,
       sendStrategy: sanitizedStrategy as any, // Type assertion needed for complex nested types

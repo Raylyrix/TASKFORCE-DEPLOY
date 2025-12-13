@@ -19,6 +19,8 @@ import domainsRouter from "./modules/domains";
 import campaignFoldersRouter from "./modules/campaignFolders";
 import { dataRetentionRouter } from "./modules/dataRetention";
 import { adminRouter } from "./modules/admin";
+import { apiKeysRouter } from "./modules/apiKeys";
+import { v1Router } from "./v1";
 
 export const router = Router();
 
@@ -41,3 +43,5 @@ router.use("/domains", domainsRouter);
 router.use("/campaign-folders", campaignFoldersRouter);
 router.use("/data-retention", dataRetentionRouter);
 router.use("/admin", adminRouter);
+router.use("/api-keys", apiKeysRouter); // API key management (uses X-User-Id)
+router.use("/v1", v1Router); // External API v1 (uses X-API-Key)

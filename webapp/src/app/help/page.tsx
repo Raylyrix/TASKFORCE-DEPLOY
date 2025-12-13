@@ -15,6 +15,7 @@ export default function HelpPage() {
         { title: "Connecting Your Gmail Account", href: "/settings" },
         { title: "Setting Up Calendar Sync", href: "/settings" },
         { title: "Understanding the Dashboard", href: "/dashboard" },
+        { title: "API Documentation", href: "/api-docs" },
       ],
     },
     {
