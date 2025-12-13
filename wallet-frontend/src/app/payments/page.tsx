@@ -6,6 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { paymentsApi, walletsApi, exchangeApi } from '@/lib/api'
 import { useWalletStore } from '@/lib/store'
 import Layout from '@/components/Layout'
+import QRScanner from '@/components/QRScanner'
 import { ArrowLeft, QrCode, Scan, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
@@ -18,6 +19,7 @@ export default function PaymentsPage() {
   const [cryptoCurrency, setCryptoCurrency] = useState('ETH')
   const [walletId, setWalletId] = useState('')
   const [error, setError] = useState('')
+  const [showScanner, setShowScanner] = useState(false)
 
   const { data: wallets } = useQuery({
     queryKey: ['wallets'],
@@ -106,6 +108,7 @@ export default function PaymentsPage() {
                 />
                 <button
                   type="button"
+                  onClick={() => setShowScanner(true)}
                   className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   <Scan className="w-5 h-5" />
@@ -188,6 +191,16 @@ export default function PaymentsPage() {
           </form>
         </div>
       </div>
+
+      {showScanner && (
+        <QRScanner
+          onScan={(result) => {
+            setMerchantQR(result)
+            setShowScanner(false)
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </Layout>
   )
 }

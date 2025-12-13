@@ -12,6 +12,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+RUN npx prisma generate
 
 # Production image, copy all the files and run
 FROM base AS runner
@@ -22,10 +23,27 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
+# Install Prisma CLI for migrations
+RUN npm install -g prisma@latest
+
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Create startup script
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo 'if [ -n "$DATABASE_URL" ]; then' >> /app/start.sh && \
+    echo '  echo "Running database migrations..."' >> /app/start.sh && \
+    echo '  npx prisma migrate deploy || echo "Migration failed or already applied"' >> /app/start.sh && \
+    echo 'else' >> /app/start.sh && \
+    echo '  echo "WARNING: DATABASE_URL not set, skipping migrations"' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
+    echo 'echo "Starting server..."' >> /app/start.sh && \
+    echo 'exec node dist/server.js' >> /app/start.sh && \
+    chmod +x /app/start.sh
 
 USER nodejs
 
@@ -33,5 +51,5 @@ EXPOSE 4000
 
 ENV PORT=4000
 
-CMD ["node", "dist/server.js"]
+CMD ["/app/start.sh"]
 
