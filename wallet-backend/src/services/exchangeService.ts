@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { getCache, setCache } from '../lib/redis';
 
 const BINANCE_API = 'https://api.binance.com/api/v3';
 const COINBASE_API = 'https://api.coinbase.com/v2';
@@ -64,8 +65,24 @@ export async function getExchangeRate(
   toCurrency: string,
   source?: string
 ): Promise<{ rate: number; source: string }> {
-  // Check cache first (last 30 seconds)
-  const cached = await prisma.exchangeRate.findFirst({
+  // Check Redis cache first (30 seconds TTL)
+  const cacheKey = `exchange_rate:${fromCurrency}:${toCurrency}`;
+  const cached = await getCache(cacheKey);
+  
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      return {
+        rate: parsed.rate,
+        source: parsed.source,
+      };
+    } catch (error) {
+      // Invalid cache, continue to fetch
+    }
+  }
+  
+  // Fallback to database cache (last 30 seconds)
+  const dbCached = await prisma.exchangeRate.findFirst({
     where: {
       fromCurrency,
       toCurrency,
@@ -76,11 +93,14 @@ export async function getExchangeRate(
     orderBy: { timestamp: 'desc' },
   });
   
-  if (cached) {
-    return {
-      rate: Number(cached.rate),
-      source: cached.source,
+  if (dbCached) {
+    const result = {
+      rate: Number(dbCached.rate),
+      source: dbCached.source,
     };
+    // Update Redis cache
+    await setCache(cacheKey, JSON.stringify(result), 30);
+    return result;
   }
   
   // Try to fetch from specified source or try all
@@ -104,7 +124,10 @@ export async function getExchangeRate(
     }
   }
   
-  // Cache the rate
+  // Cache the rate in Redis (30 seconds)
+  await setCache(cacheKey, JSON.stringify({ rate, source: rateSource }), 30);
+  
+  // Also cache in database for longer-term storage
   await prisma.exchangeRate.create({
     data: {
       fromCurrency,

@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { router } from './routes';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
+import { getRedisClient, closeRedis } from './lib/redis';
 
 dotenv.config();
 
@@ -70,6 +71,9 @@ async function start() {
     await prisma.$connect();
     logger.info('Database connected');
     
+    // Connect to Redis (optional, won't fail if not available)
+    await getRedisClient();
+    
     app.listen(PORT, () => {
       logger.info(`TaskForce Wallet API running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -83,12 +87,14 @@ async function start() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  await closeRedis();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  await closeRedis();
   await prisma.$disconnect();
   process.exit(0);
 });
