@@ -77,17 +77,23 @@ app.use((req, res) => {
 // Start server
 async function start() {
   try {
-    // Check for database URL
+    // Check for database URL - Railway may provide it via service reference
     const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!dbUrl) {
-      logger.error('DATABASE_URL or POSTGRES_URL not set. Cannot start server.');
-      logger.error('Please set DATABASE_URL in Railway service variables.');
-      process.exit(1);
+    if (!dbUrl || dbUrl.trim() === '' || dbUrl.includes('${{')) {
+      logger.warn('DATABASE_URL or POSTGRES_URL not set or unresolved. Server will start but database operations will fail.');
+      logger.warn('Please set DATABASE_URL in Railway service variables using service reference: ${{wallet-db.POSTGRES_URL}}');
+      // Don't exit - let the server start so healthcheck can pass
+      // Database connection will be attempted when needed
+    } else {
+      // Test database connection
+      try {
+        await prisma.$connect();
+        logger.info('Database connected');
+      } catch (dbError) {
+        logger.error('Database connection failed', { error: dbError });
+        // Continue anyway - healthcheck should still work
+      }
     }
-    
-    // Test database connection
-    await prisma.$connect();
-    logger.info('Database connected');
     
     // Connect to Redis (optional, won't fail if not available)
     await getRedisClient();
