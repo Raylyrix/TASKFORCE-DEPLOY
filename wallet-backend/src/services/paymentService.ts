@@ -242,39 +242,20 @@ async function getOrCreateEscrowWallet(chain: string) {
 
 /**
  * Complete payment (convert to fiat and settle to merchant)
+ * This now uses the settlement service to:
+ * 1. Sell crypto for fiat
+ * 2. Send fiat to merchant's UPI/bank account
  */
 export async function completePayment(paymentId: string) {
-  const payment = await prisma.payment.findFirst({
-    where: {
-      id: paymentId,
-      status: 'PROCESSING',
-    },
-    include: {
-      merchant: true,
-    },
-  });
+  // Import settlement service
+  const { settlePayment } = await import('./settlementService');
   
-  if (!payment) {
-    throw new Error('Payment not found or not in processing state');
-  }
+  // Use settlement service to complete payment
+  const result = await settlePayment(paymentId);
   
-  // In production, this would:
-  // 1. Convert crypto to fiat via exchange
-  // 2. Send fiat to merchant's bank account
-  // 3. Update payment status to COMPLETED
+  logger.info('Payment completed via settlement', { paymentId, result });
   
-  // For now, mark as completed (actual settlement would be done via exchange API)
-  await prisma.payment.update({
-    where: { id: paymentId },
-    data: {
-      status: 'COMPLETED',
-      completedAt: new Date(),
-    },
-  });
-  
-  logger.info('Payment completed', { paymentId });
-  
-  return payment;
+  return result;
 }
 
 /**

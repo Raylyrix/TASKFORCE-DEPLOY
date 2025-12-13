@@ -187,6 +187,8 @@ model Merchant {
   bankAccount     String?
   bankName        String?
   ifscCode        String?
+  upiId           String?  // UPI ID like merchant@ybl, merchant@paytm
+  upiVerified     Boolean  @default(false)
   swiftCode       String?  // For international
   accountHolderName String?
   qrCode          String   @unique
