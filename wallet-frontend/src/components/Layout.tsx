@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useWalletStore } from '@/lib/store'
 import { authApi } from '@/lib/api'
-import { Wallet, Home, Send, QrCode, Settings, LogOut, Menu, X } from 'lucide-react'
+import { Wallet, Home, Send, QrCode, Settings, LogOut, Menu, X, Store } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 
@@ -23,6 +23,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: '/dashboard', icon: Home, label: 'Dashboard' },
     { href: '/send', icon: Send, label: 'Send' },
     { href: '/payments', icon: QrCode, label: 'Payments' },
+    { href: '/merchant', icon: Store, label: 'Merchant' },
     { href: '/settings', icon: Settings, label: 'Settings' },
   ]
 

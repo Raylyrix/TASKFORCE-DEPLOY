@@ -99,6 +99,10 @@ export const walletsApi = {
 
 // Payments API
 export const paymentsApi = {
+  getOptions: async () => {
+    const response = await apiClient.get('/payments/options')
+    return response.data
+  },
   create: async (data: {
     walletId: string
     merchantId?: string

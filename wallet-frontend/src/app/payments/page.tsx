@@ -3,17 +3,19 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { paymentsApi, walletsApi, exchangeApi } from '@/lib/api'
+import { paymentsApi, walletsApi, exchangeApi, merchantsApi } from '@/lib/api'
 import { useWalletStore } from '@/lib/store'
 import Layout from '@/components/Layout'
 import QRScanner from '@/components/QRScanner'
-import { ArrowLeft, QrCode, Scan, AlertCircle } from 'lucide-react'
+import { ArrowLeft, QrCode, Scan, AlertCircle, X } from 'lucide-react'
 import Link from 'next/link'
 
 export default function PaymentsPage() {
   const router = useRouter()
   const { user } = useWalletStore()
   const [merchantQR, setMerchantQR] = useState('')
+  const [merchantId, setMerchantId] = useState('')
+  const [merchantName, setMerchantName] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('INR')
   const [cryptoCurrency, setCryptoCurrency] = useState('ETH')
@@ -26,6 +28,34 @@ export default function PaymentsPage() {
     queryFn: () => walletsApi.list(),
     enabled: !!user,
   })
+
+  const { data: paymentOptions } = useQuery({
+    queryKey: ['payment-options'],
+    queryFn: () => paymentsApi.getOptions(),
+    enabled: !!user,
+  })
+
+  // When QR code is scanned, look up merchant
+  useEffect(() => {
+    if (merchantQR && merchantQR.length > 10) {
+      // Try to fetch merchant by QR code
+      merchantsApi.getByQR(merchantQR)
+        .then((res) => {
+          if (res.data) {
+            setMerchantId(res.data.id)
+            setMerchantName(res.data.businessName)
+          }
+        })
+        .catch(() => {
+          // Not a valid merchant QR, clear merchant info
+          setMerchantId('')
+          setMerchantName('')
+        })
+    } else {
+      setMerchantId('')
+      setMerchantName('')
+    }
+  }, [merchantQR])
 
   const createPaymentMutation = useMutation({
     mutationFn: (data: any) => paymentsApi.create(data),
@@ -49,9 +79,14 @@ export default function PaymentsPage() {
       return
     }
 
+    if (!merchantId) {
+      setError('Invalid merchant QR code. Please scan a valid merchant QR code.')
+      return
+    }
+
     createPaymentMutation.mutate({
       walletId,
-      merchantId: merchantQR,
+      merchantId,
       amount: parseFloat(amount),
       currency,
       cryptoCurrency,
