@@ -187,7 +187,7 @@ walletsRouter.post('/:id/send', async (req, res, next) => {
     
     // Check balance
     const balance = await getWalletBalance(walletId, req.userId!);
-    const nativeBalance = balance.find(b => b.tokenAddress === null);
+    const nativeBalance = balance.find((b: any) => b.tokenAddress === null);
     
     if (!nativeBalance || BigInt(nativeBalance.balance) < BigInt(body.amount)) {
       return res.status(400).json({
