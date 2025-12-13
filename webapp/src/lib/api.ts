@@ -126,6 +126,13 @@ type AdminMetrics = {
   messageStatus: Record<string, number>;
   recipientStatus: Record<string, number>;
   trackingEvents: Record<string, number>;
+  bounceStatistics: {
+    total: number;
+    hard: number;
+    soft: number;
+    bounceRate: number;
+    byCategory: Record<string, number>;
+  };
   recentActivity: {
     messagesLast24h: number;
     trackingEventsLast24h: number;

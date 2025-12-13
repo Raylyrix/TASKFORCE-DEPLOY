@@ -351,6 +351,130 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {/* Message Status & Bounce Statistics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Message Status Breakdown */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Mail className="w-5 h-5" />
+                  Message Status Breakdown
+                </h2>
+                <div className="space-y-3">
+                  {Object.entries(metrics.messageStatus).map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-700 capitalize">{status.toLowerCase()}</span>
+                      <span className={`font-semibold ${
+                        status === 'SENT' ? 'text-green-600' :
+                        status === 'FAILED' || status === 'BOUNCED' ? 'text-red-600' :
+                        'text-gray-600'
+                      }`}>
+                        {count.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                  {Object.keys(metrics.messageStatus).length === 0 && (
+                    <p className="text-center text-gray-500 py-4">No message data available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Bounce Statistics */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Bounce Statistics
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                    <span className="text-gray-700">Total Bounces</span>
+                    <span className="font-semibold text-red-600">
+                      {metrics.bounceStatistics?.total?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                    <span className="text-gray-700">Hard Bounces</span>
+                    <span className="font-semibold text-orange-600">
+                      {metrics.bounceStatistics?.hard?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <span className="text-gray-700">Soft Bounces</span>
+                    <span className="font-semibold text-yellow-600">
+                      {metrics.bounceStatistics?.soft?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <span className="text-gray-700">Bounce Rate</span>
+                    <span className="font-semibold text-blue-600">
+                      {metrics.bounceStatistics?.bounceRate?.toFixed(2) || '0.00'}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Message Status & Bounce Statistics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Message Status Breakdown */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Mail className="w-5 h-5" />
+                  Message Status Breakdown
+                </h2>
+                <div className="space-y-3">
+                  {Object.entries(metrics.messageStatus).map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-700 capitalize">{status.toLowerCase()}</span>
+                      <span className={`font-semibold ${
+                        status === 'SENT' ? 'text-green-600' :
+                        status === 'FAILED' || status === 'BOUNCED' ? 'text-red-600' :
+                        'text-gray-600'
+                      }`}>
+                        {count.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                  {Object.keys(metrics.messageStatus).length === 0 && (
+                    <p className="text-center text-gray-500 py-4">No message data available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Bounce Statistics */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Bounce Statistics
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                    <span className="text-gray-700">Total Bounces</span>
+                    <span className="font-semibold text-red-600">
+                      {metrics.bounceStatistics?.total?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                    <span className="text-gray-700">Hard Bounces</span>
+                    <span className="font-semibold text-orange-600">
+                      {metrics.bounceStatistics?.hard?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <span className="text-gray-700">Soft Bounces</span>
+                    <span className="font-semibold text-yellow-600">
+                      {metrics.bounceStatistics?.soft?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <span className="text-gray-700">Bounce Rate</span>
+                    <span className="font-semibold text-blue-600">
+                      {metrics.bounceStatistics?.bounceRate?.toFixed(2) || '0.00'}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Recent Activity & Top Users */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Recent Activity */}

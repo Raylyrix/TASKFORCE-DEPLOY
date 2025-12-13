@@ -128,6 +128,28 @@ adminRouter.get("/metrics", async (req, res, next) => {
       _count: true,
     });
 
+    // Get bounce statistics
+    const bounceStats = await prisma.emailBounce.groupBy({
+      by: ["bounceType", "bounceCategory"],
+      _count: true,
+    }).catch(() => []); // Handle if table doesn't exist yet
+
+    const totalBounces = await prisma.emailBounce.count().catch(() => 0);
+    const hardBounces = await prisma.emailBounce.count({
+      where: { bounceType: "HARD" },
+    }).catch(() => 0);
+    const softBounces = await prisma.emailBounce.count({
+      where: { bounceType: "SOFT" },
+    }).catch(() => 0);
+
+    // Calculate bounce rate (bounces / total messages sent)
+    const totalSentMessages = await prisma.messageLog.count({
+      where: { status: MessageStatus.SENT },
+    });
+    const bounceRate = totalSentMessages > 0 
+      ? (totalBounces / (totalSentMessages + totalBounces)) * 100 
+      : 0;
+
     // Get database size estimate (cached or optional to prevent overload)
     // Only calculate if not in cache or cache expired
     let dbSize = { estimatedSizeMB: 0, totalRows: 0, breakdown: {} };
@@ -339,6 +361,20 @@ adminRouter.get("/metrics", async (req, res, next) => {
         },
         {} as Record<string, number>,
       ),
+      bounceStatistics: {
+        total: totalBounces,
+        hard: hardBounces,
+        soft: softBounces,
+        bounceRate: Math.round(bounceRate * 100) / 100,
+        byCategory: bounceStats.reduce(
+          (acc, item) => {
+            const key = `${item.bounceType}_${item.bounceCategory}`;
+            acc[key] = item._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+      },
       recentActivity: {
         messagesLast24h,
         trackingEventsLast24h,

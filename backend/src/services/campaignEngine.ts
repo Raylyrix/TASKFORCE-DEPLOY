@@ -755,6 +755,7 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
     labelIds.push(recipient.campaign.gmailLabelId);
   }
 
+  try {
   const sendResult = await gmailDeliveryService.sendEmailViaGmail({
     userId: recipient.campaign.userId,
     to: recipient.email,
@@ -788,6 +789,83 @@ const processCampaignDispatch = async (job: CampaignDispatchJob) => {
       lastSentAt: new Date(),
     },
   });
+  } catch (error: any) {
+    // Handle send failures and bounces
+    const errorMessage = error.message || String(error);
+    const errorLower = errorMessage.toLowerCase();
+
+    // Determine if this is a bounce (hard bounce indicators)
+    const isBounce = 
+      errorLower.includes('invalid') ||
+      errorLower.includes('does not exist') ||
+      errorLower.includes('no such user') ||
+      errorLower.includes('user unknown') ||
+      errorLower.includes('address rejected') ||
+      errorLower.includes('bounce') ||
+      errorLower.includes('blocked') ||
+      errorLower.includes('spam');
+
+    // Update MessageLog status
+    const messageStatus = isBounce ? MessageStatus.BOUNCED : MessageStatus.FAILED;
+    await prisma.messageLog.update({
+      where: { id: messageLog.id },
+      data: {
+        subject: cleanSubject,
+        status: messageStatus,
+        error: errorMessage.substring(0, 500), // Limit error length
+        sendAt: null,
+      },
+    });
+
+    // Update recipient status
+    const recipientStatus = isBounce ? RecipientStatus.BOUNCED : RecipientStatus.FAILED;
+    await prisma.campaignRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        status: recipientStatus,
+      },
+    });
+
+    // Link the bounce record to this messageLog (if bounce was created in gmailDelivery)
+    if (isBounce) {
+      try {
+        // Find the most recent bounce for this email and link it to messageLog
+        await prisma.emailBounce.updateMany({
+          where: {
+            recipientEmail: recipient.email,
+            messageLogId: null, // Only update unlinked bounces
+            createdAt: {
+              gte: new Date(Date.now() - 60000), // Within last minute
+            },
+          },
+          data: {
+            messageLogId: messageLog.id,
+          },
+        });
+      } catch (bounceLinkError) {
+        // Non-critical - bounce was already recorded, just couldn't link it
+        logger.warn(
+          { error: bounceLinkError, messageLogId: messageLog.id, recipientEmail: recipient.email },
+          "Failed to link bounce to messageLog"
+        );
+      }
+    }
+
+    logger.error(
+      {
+        error: errorMessage,
+        campaignId: recipient.campaign.id,
+        recipientId: recipient.id,
+        messageLogId: messageLog.id,
+        isBounce,
+        status: messageStatus,
+      },
+      `Email send ${isBounce ? 'bounced' : 'failed'}`
+    );
+
+    // Re-throw to let queue handle retry logic if needed
+    throw error;
+  }
 
   // Update campaign status to RUNNING if it's still SCHEDULED
   await prisma.campaign.updateMany({
