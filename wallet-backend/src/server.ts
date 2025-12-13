@@ -67,6 +67,14 @@ app.use((req, res) => {
 // Start server
 async function start() {
   try {
+    // Check for database URL
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      logger.error('DATABASE_URL or POSTGRES_URL not set. Cannot start server.');
+      logger.error('Please set DATABASE_URL in Railway service variables.');
+      process.exit(1);
+    }
+    
     // Test database connection
     await prisma.$connect();
     logger.info('Database connected');
