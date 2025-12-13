@@ -14,8 +14,18 @@ const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(helmet());
+// Handle CORS_ORIGIN - Railway provides domain without https://
+const getCorsOrigin = () => {
+  const origin = process.env.CORS_ORIGIN || '*'
+  // If origin doesn't start with http, add https://
+  if (origin && origin !== '*' && !origin.startsWith('http')) {
+    return `https://${origin}`
+  }
+  return origin
+}
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: getCorsOrigin(),
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));

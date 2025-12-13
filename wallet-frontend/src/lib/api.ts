@@ -1,6 +1,16 @@
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+// Railway provides URLs without https://, so we need to add it
+const getApiUrl = () => {
+  const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+  // If URL doesn't start with http, add https://
+  if (url && !url.startsWith('http')) {
+    return `https://${url}`
+  }
+  return url
+}
+
+const API_URL = getApiUrl()
 
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
