@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { authApi } from '@/lib/api'
 import { useWalletStore } from '@/lib/store'
 import Layout from '@/components/Layout'
@@ -10,6 +11,12 @@ export default function SettingsPage() {
   const router = useRouter()
   const { user, setUser, setToken } = useWalletStore()
 
+  useEffect(() => {
+    if (!user) {
+      router.push('/login')
+    }
+  }, [user, router])
+
   const handleLogout = async () => {
     await authApi.logout()
     setUser(null)
@@ -18,7 +25,6 @@ export default function SettingsPage() {
   }
 
   if (!user) {
-    router.push('/login')
     return null
   }
 

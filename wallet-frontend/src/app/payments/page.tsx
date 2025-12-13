@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { paymentsApi, walletsApi, exchangeApi } from '@/lib/api'
@@ -58,8 +58,13 @@ export default function PaymentsPage() {
     })
   }
 
+  useEffect(() => {
+    if (!user) {
+      router.push('/login')
+    }
+  }, [user, router])
+
   if (!user) {
-    router.push('/login')
     return null
   }
 
