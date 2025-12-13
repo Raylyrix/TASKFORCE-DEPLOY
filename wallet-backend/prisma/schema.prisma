@@ -1,0 +1,251 @@
+// TaskForce Wallet & Payments Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phone         String?  @unique
+  passwordHash  String
+  displayName   String?
+  avatar        String?
+  kycStatus     String   @default("PENDING") // PENDING, VERIFIED, REJECTED
+  kycData       Json?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  wallets       Wallet[]
+  payments      Payment[]
+  merchants     Merchant[]
+  transactions  Transaction[]
+  addresses     Address[]
+  sessions      Session[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Wallet {
+  id            String   @id @default(cuid())
+  userId        String
+  chain         String   // ethereum, solana, bitcoin
+  address       String
+  privateKeyEnc String? // Encrypted private key (optional for hardware wallets)
+  derivationPath String?
+  mnemonicEnc   String? // Encrypted mnemonic (master seed)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses     Address[]
+  transactions  Transaction[]
+  balances      Balance[]
+
+  @@unique([userId, chain, address])
+  @@index([userId])
+  @@index([chain])
+  @@index([address])
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  walletId      String
+  userId        String
+  chain         String
+  address       String
+  label         String?  // Custom label
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@unique([chain, address])
+  @@index([userId])
+  @@index([walletId])
+  @@index([address])
+}
+
+model Balance {
+  id            String   @id @default(cuid())
+  walletId      String
+  chain         String
+  tokenAddress  String?  // null for native tokens
+  tokenSymbol   String
+  balance       String   // BigInt as string
+  usdValue      Decimal? @db.Decimal(20, 8)
+  lastUpdated   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, chain, tokenAddress])
+  @@index([walletId])
+  @@index([chain, tokenSymbol])
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  walletId      String
+  addressId     String?
+  chain         String
+  txHash        String?  @unique
+  fromAddress   String
+  toAddress     String
+  amount        String   // BigInt as string
+  tokenAddress  String?  // null for native tokens
+  tokenSymbol   String
+  status        String   // PENDING, CONFIRMED, FAILED
+  blockNumber   BigInt?
+  gasUsed       BigInt?
+  gasPrice      BigInt?
+  fee           String?
+  error         String?  @db.Text
+  createdAt     DateTime @default(now())
+  confirmedAt   DateTime?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  address       Address? @relation(fields: [addressId], references: [id])
+  payment       Payment? @relation
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([txHash])
+  @@index([status])
+  @@index([chain])
+  @@index([createdAt])
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  merchantId      String?
+  walletId        String?  // Wallet used for payment
+  transactionId  String?  @unique
+  paymentType     String   // QR_PAYMENT, REQUEST, SPLIT
+  amount          Decimal  @db.Decimal(20, 8)
+  currency        String   // INR, USD, etc.
+  cryptoAmount    String   // Amount in crypto
+  cryptoCurrency  String   // BTC, ETH, etc.
+  exchangeRate    Decimal  @db.Decimal(20, 8)
+  status          String   // PENDING, PROCESSING, COMPLETED, FAILED, REFUNDED
+  escrowAddress   String?  // Escrow wallet address
+  escrowTxHash    String?  // Transaction hash of escrow deposit
+  merchantBankAccount String?
+  settlementTxId  String?
+  error           String?  @db.Text
+  refundReason    String?  @db.Text
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  refundedAt      DateTime?
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant        Merchant? @relation(fields: [merchantId], references: [id])
+  transaction     Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([userId])
+  @@index([merchantId])
+  @@index([walletId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([cryptoCurrency])
+}
+
+model Merchant {
+  id              String   @id @default(cuid())
+  userId          String
+  businessName    String
+  businessType    String?
+  phone           String?
+  email           String?
+  address         String?  @db.Text
+  bankAccount     String?
+  bankName        String?
+  ifscCode        String?
+  swiftCode       String?  // For international
+  accountHolderName String?
+  qrCode          String   @unique
+  isActive        Boolean  @default(true)
+  settlementDelay Int      @default(0) // Minutes
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+
+  @@index([userId])
+  @@index([qrCode])
+  @@index([isActive])
+}
+
+model ExchangeRate {
+  id            String   @id @default(cuid())
+  fromCurrency  String   // BTC, ETH, etc.
+  toCurrency    String   // INR, USD, etc.
+  rate          Decimal  @db.Decimal(20, 8)
+  source        String   // binance, coinbase, etc.
+  timestamp     DateTime @default(now())
+
+  @@index([fromCurrency, toCurrency])
+  @@index([timestamp])
+  @@index([source])
+}
+
+model EscrowWallet {
+  id            String   @id @default(cuid())
+  chain         String
+  address       String   @unique
+  privateKeyEnc String  // Encrypted
+  balance       String   // Current balance
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([chain])
+  @@index([address])
+}
+
+model PaymentRequest {
+  id            String   @id @default(cuid())
+  fromUserId    String
+  toUserId      String?
+  toEmail       String?
+  toPhone       String?
+  amount        Decimal  @db.Decimal(20, 8)
+  currency      String
+  description   String?  @db.Text
+  status        String   // PENDING, PAID, CANCELLED, EXPIRED
+  expiresAt     DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
