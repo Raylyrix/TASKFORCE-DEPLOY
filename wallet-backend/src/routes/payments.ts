@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth';
 import { createPayment, processPayment, completePayment, refundPayment } from '../services/paymentService';
+import { getPaymentOptions } from '../services/cryptoConversionService';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -16,6 +17,28 @@ const createPaymentSchema = z.object({
   currency: z.string(),
   cryptoCurrency: z.string(),
   walletId: z.string(),
+});
+
+/**
+ * GET /api/payments/options
+ * Get payment options (which cryptos can be used)
+ */
+paymentsRouter.get('/options', async (req, res, next) => {
+  try {
+    const options = await getPaymentOptions(req.userId!);
+    
+    res.json({
+      success: true,
+      data: {
+        ...options,
+        supportedCryptos: ['BTC', 'ETH', 'SOL', 'USDT', 'USDC'],
+        message: 'Direct payments supported for BTC, ETH, SOL, USDT, USDC. Other cryptos require conversion to USDT/USDC first.',
+      },
+    });
+  } catch (error: any) {
+    logger.error('Failed to get payment options', { error, userId: req.userId });
+    next(error);
+  }
 });
 
 /**
@@ -45,6 +68,15 @@ paymentsRouter.post('/', async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: error.message,
+      });
+    }
+    
+    // Handle unsupported crypto error
+    if (error.message.includes('not supported for direct payments')) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+        suggestion: 'Please convert your crypto to USDT or USDC first, or use BTC, ETH, or SOL.',
       });
     }
     

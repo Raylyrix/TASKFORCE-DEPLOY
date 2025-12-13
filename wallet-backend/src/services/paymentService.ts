@@ -6,6 +6,16 @@ import { sendEthereumTransaction, sendSolanaTransaction } from './blockchainServ
 import { getWalletPrivateKey } from './walletService';
 import { encrypt } from '../lib/encryption';
 import crypto from 'crypto';
+import { isPaymentSupported, convertCryptoToStablecoin } from './cryptoConversionService';
+
+// Supported cryptos for direct payments (high liquidity, fast settlement)
+const PAYMENT_SUPPORTED_CRYPTOS = [
+  'BTC',   // Bitcoin
+  'ETH',   // Ethereum
+  'SOL',   // Solana
+  'USDT',  // Tether (stablecoin)
+  'USDC',  // USD Coin (stablecoin)
+] as const;
 
 const paymentSchema = z.object({
   merchantId: z.string().optional(),
@@ -24,6 +34,19 @@ export async function createPayment(
 ) {
   const validated = paymentSchema.parse(data);
   
+  // Validate crypto currency is supported for payments
+  const cryptoUpper = validated.cryptoCurrency.toUpperCase();
+  
+  if (!isPaymentSupported(validated.cryptoCurrency)) {
+    // Option: Auto-convert to USDT
+    // For now, we'll reject and suggest conversion
+    throw new Error(
+      `Crypto currency ${validated.cryptoCurrency} is not supported for direct payments. ` +
+      `Supported currencies: ${PAYMENT_SUPPORTED_CRYPTOS.join(', ')}. ` +
+      `Please convert ${validated.cryptoCurrency} to USDT or USDC first, or use a supported crypto.`
+    );
+  }
+  
   // Get user's wallet
   const wallet = await prisma.wallet.findFirst({
     where: {
@@ -34,6 +57,15 @@ export async function createPayment(
   
   if (!wallet) {
     throw new Error('Wallet not found');
+  }
+  
+  // Verify wallet chain matches crypto currency
+  const expectedChain = 
+    cryptoUpper === 'BTC' ? 'bitcoin' :
+    cryptoUpper === 'SOL' ? 'solana' : 'ethereum';
+  
+  if (wallet.chain !== expectedChain && cryptoUpper !== 'USDT' && cryptoUpper !== 'USDC') {
+    throw new Error(`Wallet chain (${wallet.chain}) does not match crypto currency (${validated.cryptoCurrency})`);
   }
   
   // Store walletId in payment for later use
