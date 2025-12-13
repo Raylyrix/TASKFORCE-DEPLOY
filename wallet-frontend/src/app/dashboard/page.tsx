@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { walletsApi } from '@/lib/api'
 import { useWalletStore } from '@/lib/store'
 import Layout from '@/components/Layout'
-import { Wallet, Plus, RefreshCw, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Wallet, Plus, RefreshCw, ArrowUpRight, ArrowDownRight, History } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DashboardPage() {
@@ -126,7 +126,7 @@ export default function DashboardPage() {
         )}
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
           <Link
             href="/send"
             className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow"
@@ -153,6 +153,21 @@ export default function DashboardPage() {
               <div>
                 <h3 className="font-semibold text-gray-900">Pay with QR</h3>
                 <p className="text-sm text-gray-600">Scan and pay merchants</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/transactions"
+            className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <History className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Transactions</h3>
+                <p className="text-sm text-gray-600">View transaction history</p>
               </div>
             </div>
           </Link>
