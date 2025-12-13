@@ -19,12 +19,17 @@ import {
   Clock,
   Download,
   Package,
+  Plus,
+  Copy,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"profile" | "calendar" | "notifications" | "account">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "calendar" | "notifications" | "apiKeys" | "account">("profile");
   const [profileForm, setProfileForm] = useState({
     displayName: "",
     email: "",
@@ -80,7 +85,8 @@ export default function SettingsPage() {
     { id: "profile" as const, label: "Profile", icon: User },
     { id: "calendar" as const, label: "Calendar", icon: Calendar },
     { id: "notifications" as const, label: "Notifications", icon: Bell },
-    { id: "account" as const, label: "Account", icon: Key },
+    { id: "apiKeys" as const, label: "API Keys", icon: Key },
+    { id: "account" as const, label: "Account", icon: User },
   ];
 
   return (
@@ -134,6 +140,8 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "notifications" && <NotificationsTab />}
+
+          {activeTab === "apiKeys" && <ApiKeysTab />}
 
           {activeTab === "account" && <AccountTab onLogout={handleLogout} />}
           
@@ -489,6 +497,240 @@ function ExtensionDownloadSection() {
             </ol>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ApiKeysTab() {
+  const queryClient = useQueryClient();
+  const [showNewKeyDialog, setShowNewKeyDialog] = useState(false);
+  const [newKey, setNewKey] = useState<{ key: string; name: string } | null>(null);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(["*"]);
+  const [newKeyTier, setNewKeyTier] = useState<"free" | "starter" | "professional" | "enterprise">("free");
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
+  const { data: apiKeysData, isLoading } = useQuery({
+    queryKey: ["api-keys"],
+    queryFn: () => api.apiKeys.list(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: {
+      name: string;
+      scopes?: string[];
+      rateLimitTier?: "free" | "starter" | "professional" | "enterprise";
+    }) => api.apiKeys.create(data),
+    onSuccess: (data) => {
+      setNewKey({ key: data.data.key, name: data.data.name });
+      setShowNewKeyDialog(false);
+      setNewKeyName("");
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => api.apiKeys.revoke(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      alert("API key revoked successfully");
+    },
+  });
+
+  const handleCreate = () => {
+    if (!newKeyName.trim()) {
+      alert("Please enter a name for the API key");
+      return;
+    }
+    createMutation.mutate({
+      name: newKeyName.trim(),
+      scopes: newKeyScopes,
+      rateLimitTier: newKeyTier,
+    });
+  };
+
+  const handleCopy = (key: string) => {
+    navigator.clipboard.writeText(key);
+    setCopySuccess(key);
+    setTimeout(() => setCopySuccess(null), 2000);
+  };
+
+  const apiKeys = apiKeysData?.data || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">API Keys</h2>
+          <p className="text-sm text-gray-600">
+            Manage API keys for programmatic access to TaskForce. Use these keys to integrate TaskForce into your applications.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowNewKeyDialog(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Create API Key
+        </button>
+      </div>
+
+      {/* New Key Dialog */}
+      {showNewKeyDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Create New API Key</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="e.g., Production API Key"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Rate Limit Tier</label>
+                <select
+                  value={newKeyTier}
+                  onChange={(e) => setNewKeyTier(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="free">Free (1,000 requests/day)</option>
+                  <option value="starter">Starter (10,000 requests/day)</option>
+                  <option value="professional">Professional (100,000 requests/day)</option>
+                  <option value="enterprise">Enterprise (Custom limits)</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending}
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+                >
+                  {createMutation.isPending ? "Creating..." : "Create"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNewKeyDialog(false);
+                    setNewKeyName("");
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Key Display Dialog */}
+      {newKey && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <div className="flex items-center gap-2 text-yellow-600 mb-4">
+              <AlertCircle className="w-5 h-5" />
+              <h3 className="text-lg font-semibold">Save Your API Key</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              This is the only time you'll see this API key. Make sure to copy it and store it securely.
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">{newKey.name}</span>
+                <button
+                  onClick={() => handleCopy(newKey.key)}
+                  className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copySuccess === newKey.key ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <code className="text-sm text-gray-900 break-all font-mono">{newKey.key}</code>
+            </div>
+            <button
+              onClick={() => setNewKey(null)}
+              className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              I've Saved My Key
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* API Keys List */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="w-6 h-6 animate-spin text-primary-600" />
+        </div>
+      ) : apiKeys.length === 0 ? (
+        <div className="text-center py-12 border border-gray-200 rounded-lg">
+          <Key className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600 mb-2">No API keys yet</p>
+          <p className="text-sm text-gray-500">Create your first API key to get started</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {apiKeys.map((apiKey) => (
+            <div
+              key={apiKey.id}
+              className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Key className="w-5 h-5 text-gray-400" />
+                    <h3 className="font-medium text-gray-900">{apiKey.name}</h3>
+                    {!apiKey.isActive && (
+                      <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">Revoked</span>
+                    )}
+                    {apiKey.expiresAt && new Date(apiKey.expiresAt) < new Date() && (
+                      <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded">Expired</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 ml-8">
+                    <span>Tier: {apiKey.rateLimitTier}</span>
+                    <span>Scopes: {apiKey.scopes.join(", ")}</span>
+                    {apiKey.lastUsedAt && (
+                      <span>Last used: {new Date(apiKey.lastUsedAt).toLocaleDateString()}</span>
+                    )}
+                    <span>Created: {new Date(apiKey.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (confirm("Are you sure you want to revoke this API key? This action cannot be undone.")) {
+                      revokeMutation.mutate(apiKey.id);
+                    }
+                  }}
+                  disabled={revokeMutation.isPending || !apiKey.isActive}
+                  className="flex items-center gap-2 px-3 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Revoke
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">API Documentation</h3>
+        <p className="text-sm text-blue-700 mb-3">
+          Learn how to use your API keys in the API documentation.
+        </p>
+        <a
+          href="/api-docs"
+          className="text-sm text-blue-600 hover:text-blue-700 underline"
+        >
+          View API Documentation →
+        </a>
       </div>
     </div>
   );

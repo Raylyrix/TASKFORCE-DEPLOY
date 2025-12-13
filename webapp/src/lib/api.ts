@@ -1857,5 +1857,91 @@ export const api = {
         }>;
       }>(`/api/workflows/${workflowId}/executions`),
   },
+  apiKeys: {
+    list: () =>
+      apiRequest<{
+        success: boolean;
+        data: Array<{
+          id: string;
+          name: string;
+          scopes: string[];
+          rateLimitTier: string;
+          isActive: boolean;
+          expiresAt: string | null;
+          lastUsedAt: string | null;
+          createdAt: string;
+        }>;
+      }>("/api/api-keys"),
+    get: (id: string) =>
+      apiRequest<{
+        success: boolean;
+        data: {
+          id: string;
+          name: string;
+          scopes: string[];
+          rateLimitTier: string;
+          isActive: boolean;
+          expiresAt: string | null;
+          lastUsedAt: string | null;
+          createdAt: string;
+        };
+      }>(`/api/api-keys/${id}`),
+    create: (data: {
+      name: string;
+      scopes?: string[];
+      rateLimitTier?: "free" | "starter" | "professional" | "enterprise";
+      expiresAt?: string | null;
+      ipWhitelist?: string[];
+    }) =>
+      apiRequest<{
+        success: boolean;
+        data: {
+          id: string;
+          key: string; // Only shown once!
+          name: string;
+          scopes: string[];
+          rateLimitTier: string;
+          expiresAt: string | null;
+          ipWhitelist: string[];
+          createdAt: string;
+        };
+        meta: {
+          warning: string;
+        };
+      }>("/api/api-keys", {
+        method: "POST",
+        body: data,
+      }),
+    update: (id: string, data: {
+      name?: string;
+      scopes?: string[];
+      rateLimitTier?: "free" | "starter" | "professional" | "enterprise";
+      expiresAt?: string | null;
+      ipWhitelist?: string[];
+    }) =>
+      apiRequest<{
+        success: boolean;
+        data: {
+          id: string;
+          name: string;
+          scopes: string[];
+          rateLimitTier: string;
+          isActive: boolean;
+          expiresAt: string | null;
+          lastUsedAt: string | null;
+          createdAt: string;
+        };
+      }>(`/api/api-keys/${id}`, {
+        method: "PUT",
+        body: data,
+      }),
+    revoke: (id: string) =>
+      apiRequest<{
+        success: boolean;
+        data: { message: string };
+      }>(`/api/api-keys/${id}`, {
+        method: "DELETE",
+      }),
+  },
 };
 
