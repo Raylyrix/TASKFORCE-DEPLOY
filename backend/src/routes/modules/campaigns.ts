@@ -171,7 +171,8 @@ campaignsRouter.post("/", requireUser, campaignCreationRateLimiter, async (req, 
 });
 
 const scheduleSchema = z.object({
-  startAt: z.string().datetime(),
+  startAt: z.string().datetime().optional(),
+  sendAt: z.string().datetime().optional(),
 });
 
 campaignsRouter.post("/:campaignId/schedule", requireUser, campaignStartRateLimiter, async (req, res, next) => {
@@ -181,8 +182,36 @@ campaignsRouter.post("/:campaignId/schedule", requireUser, campaignStartRateLimi
       return;
     }
 
-    const { startAt } = scheduleSchema.parse(req.body ?? {});
+    const parsed = scheduleSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid schedule payload. Expected { startAt?: ISO datetime } or { sendAt?: ISO datetime }",
+        issues: parsed.error.issues,
+      });
+      return;
+    }
     const { campaignId } = req.params;
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, userId: req.currentUser.id },
+      select: { sendStrategy: true },
+    });
+
+    const fromRequest = parsed.data.startAt || parsed.data.sendAt || null;
+    const fromStrategy = (() => {
+      try {
+        const s = campaign?.sendStrategy as any;
+        const candidate = typeof s?.startAt === "string" ? s.startAt : null;
+        if (!candidate) return null;
+        const d = new Date(candidate);
+        if (Number.isNaN(d.getTime())) return null;
+        return d.toISOString();
+      } catch {
+        return null;
+      }
+    })();
+
+    const startAt = fromRequest || fromStrategy || new Date().toISOString();
 
     await campaignEngine.scheduleCampaign(campaignId, startAt);
 

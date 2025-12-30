@@ -214,7 +214,28 @@ campaignsV1Router.post("/:id/schedule", requireScope("campaigns:write"), async (
   try {
     const userId = req.apiKey!.userId;
     const campaignId = req.params.id;
-    const { startAt } = z.object({ startAt: z.string().datetime() }).parse(req.body);
+    // Backward/forward compatible scheduling:
+    // - Allow empty body => schedule at campaign.strategy.startAt (or now)
+    // - Accept sendAt as alias (common client field)
+    // - Never throw ZodError to the global handler (it returns 500); return 400 instead.
+    const scheduleParse = z.object({
+      startAt: z.string().datetime().optional(),
+      sendAt: z.string().datetime().optional(),
+    }).safeParse(req.body ?? {});
+
+    if (!scheduleParse.success) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid schedule payload. Expected { startAt?: ISO datetime } or { sendAt?: ISO datetime }",
+        },
+        meta: {
+          issues: scheduleParse.error.issues,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
 
     // Verify ownership
     const campaign = await prisma.campaign.findFirst({
@@ -233,6 +254,23 @@ campaignsV1Router.post("/:id/schedule", requireScope("campaigns:write"), async (
         },
       });
     }
+
+    // Determine schedule time
+    const fromRequest = scheduleParse.data.startAt || scheduleParse.data.sendAt || null;
+    const fromStrategy = (() => {
+      try {
+        const s = campaign.sendStrategy as any;
+        const candidate = typeof s?.startAt === "string" ? s.startAt : null;
+        if (!candidate) return null;
+        const d = new Date(candidate);
+        if (Number.isNaN(d.getTime())) return null;
+        return d.toISOString();
+      } catch {
+        return null;
+      }
+    })();
+
+    const startAt = fromRequest || fromStrategy || new Date().toISOString();
 
     await campaignEngine.scheduleCampaign(campaignId, startAt);
 
