@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
+import { getStringParam } from "../utils/request";
 
 /**
  * Audit logging middleware
@@ -40,7 +41,7 @@ export const auditLogger: RequestHandler = (req, res, next) => {
       resource: req.path.split("/")[2] || "unknown",
       resourceId: req.params.id || req.params.campaignId || req.params.meetingTypeId,
       ip: req.ip || req.socket.remoteAddress || "unknown",
-      userAgent: req.headers["user-agent"],
+      userAgent: getStringParam(req.headers["user-agent"]),
       method: req.method,
       path: req.path,
       statusCode: res.statusCode,

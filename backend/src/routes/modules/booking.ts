@@ -1,6 +1,7 @@
 import { addMinutes } from "date-fns";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 import { AppConfig } from "../../config/env";
 import { prisma } from "../../lib/prisma";
@@ -16,6 +17,19 @@ import { meetingRemindersService } from "../../services/meetingReminders";
 import { bookingService } from "../../services/bookingService";
 import { gmailDeliveryService } from "../../services/gmailDelivery";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { requireStringParam } from "../../utils/request";
+
+type BookingLinkWithMeetingType = Prisma.BookingLinkGetPayload<{
+  include: {
+    meetingType: {
+      include: {
+        user: true;
+        calendarConnection: true;
+        bookingLinks: true;
+      };
+    };
+  };
+}>;
 
 export const bookingRouter = Router();
 
@@ -40,21 +54,26 @@ const reminderRequestSchema = z.object({
 // Export the handler function so it can be reused
 export const handleBookingPage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token } = req.params;
+    const token = requireStringParam(req.params.token);
+    if (!token) {
+      res.status(400).send("Booking token is required");
+      return;
+    }
     const namePrefill = typeof req.query.name === "string" ? req.query.name : "";
     const emailPrefill = typeof req.query.email === "string" ? req.query.email : "";
 
     const bookingLink = await prisma.bookingLink.findUnique({
-    where: { token },
-    include: {
-      meetingType: {
-        include: {
-          user: true,
-          calendarConnection: true,
+      where: { token },
+      include: {
+        meetingType: {
+          include: {
+            user: true,
+            calendarConnection: true,
+            bookingLinks: true,
+          },
         },
       },
-    },
-  });
+    }) as BookingLinkWithMeetingType | null;
 
   if (!bookingLink || !bookingLink.meetingType) {
     res.status(404).send(`
@@ -859,7 +878,11 @@ export const handleBookingPage = async (req: Request, res: Response, next: NextF
 // JSON API endpoint for React booking page
 bookingRouter.get("/book/:token/data", async (req, res, next) => {
   try {
-    const { token } = req.params;
+    const token = requireStringParam(req.params.token);
+    if (!token) {
+      res.status(400).json({ error: "Booking token is required" });
+      return;
+    }
 
     const bookingLink = await prisma.bookingLink.findUnique({
       where: { token },
@@ -868,10 +891,11 @@ bookingRouter.get("/book/:token/data", async (req, res, next) => {
           include: {
             user: true,
             calendarConnection: true,
+            bookingLinks: true,
           },
         },
       },
-    });
+    }) as BookingLinkWithMeetingType | null;
 
     if (!bookingLink || !bookingLink.meetingType) {
       res.status(404).json({ error: "Booking link not found" });
@@ -940,7 +964,11 @@ const bookingRequestSchema = z.object({
 // Export the booking handler so it can be used in public routes
 export const handleBookingRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token } = req.params;
+    const token = requireStringParam(req.params.token);
+    if (!token) {
+      res.status(400).json({ error: "Booking token is required" });
+      return;
+    }
     const parseResult = bookingRequestSchema.safeParse(req.body);
 
     if (!parseResult.success) {
@@ -955,10 +983,11 @@ export const handleBookingRequest = async (req: Request, res: Response, next: Ne
           include: {
             user: true,
             calendarConnection: true,
+            bookingLinks: true,
           },
         },
       },
-    });
+    }) as BookingLinkWithMeetingType | null;
 
     if (!bookingLink || !bookingLink.meetingType) {
       res.status(404).json({ error: "Booking link not found" });
@@ -1022,7 +1051,11 @@ export const handleReminderRequest = async (req: Request, res: Response, next: N
     return;
   }
 
-  const { token } = req.params;
+  const token = requireStringParam(req.params.token);
+  if (!token) {
+    res.status(400).json({ error: "Booking token is required" });
+    return;
+  }
 
   const bookingLink = await prisma.bookingLink.findUnique({
     where: { token },
@@ -1035,7 +1068,7 @@ export const handleReminderRequest = async (req: Request, res: Response, next: N
         },
       },
     },
-  });
+  }) as BookingLinkWithMeetingType | null;
 
   if (!bookingLink || !bookingLink.meetingType) {
     res.status(404).json({ error: "Booking link not found" });
@@ -1053,7 +1086,7 @@ export const handleReminderRequest = async (req: Request, res: Response, next: N
           durationMinutes: bookingLink.meetingType.durationMinutes,
           userId: bookingLink.meetingType.userId,
           user: bookingLink.meetingType.user,
-          bookingLinks: bookingLink.meetingType.bookingLinks.map((link) => ({
+          bookingLinks: bookingLink.meetingType.bookingLinks.map((link: { id: string; token: string }) => ({
             id: link.id,
             token: link.token,
           })),
@@ -1109,7 +1142,11 @@ bookingRouter.post("/booking-links/:bookingLinkId/send", requireUser, async (req
       return;
     }
 
-    const { bookingLinkId } = req.params;
+    const bookingLinkId = requireStringParam(req.params.bookingLinkId);
+    if (!bookingLinkId) {
+      res.status(400).json({ error: "bookingLinkId is required" });
+      return;
+    }
     const parseResult = sendBookingLinkSchema.safeParse(req.body);
 
     if (!parseResult.success) {
@@ -1123,10 +1160,12 @@ bookingRouter.post("/booking-links/:bookingLinkId/send", requireUser, async (req
         meetingType: {
           include: {
             user: true,
+            calendarConnection: true,
+            bookingLinks: true,
           },
         },
       },
-    });
+    }) as BookingLinkWithMeetingType | null;
 
     if (!bookingLink || !bookingLink.meetingType) {
       res.status(404).json({ error: "Booking link not found" });

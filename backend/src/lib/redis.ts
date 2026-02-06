@@ -50,7 +50,7 @@ export const getRedis = () => {
       logger.info("Redis connected");
     });
 
-    redisInstance.on("reconnecting", (time) => {
+    redisInstance.on("reconnecting", (time: number) => {
       if (shouldLog(lastRedisReconnectLogAt, 15000)) {
         lastRedisReconnectLogAt = Date.now();
         logger.warn({ delayMs: time }, "Redis reconnecting");
@@ -85,7 +85,7 @@ export const getRedisForBullMQ = () => {
       logger.info("Redis BullMQ connected");
     });
 
-    redisBullMQInstance.on("reconnecting", (time) => {
+    redisBullMQInstance.on("reconnecting", (time: number) => {
       if (shouldLog(lastRedisReconnectLogAt, 15000)) {
         lastRedisReconnectLogAt = Date.now();
         logger.warn({ delayMs: time }, "Redis BullMQ reconnecting");

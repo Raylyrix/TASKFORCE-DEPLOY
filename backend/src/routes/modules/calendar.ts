@@ -12,6 +12,7 @@ import { calendarAvailabilityService } from "../../services/calendarAvailability
 import { googleCalendarService } from "../../services/googleCalendar";
 import { googleAuthService } from "../../services/googleAuth";
 import { holidaysService } from "../../services/holidays";
+import { requireStringParam } from "../../utils/request";
 import {
   meetingTypesService,
   loadMeetingTypeBookingStats,
@@ -127,9 +128,15 @@ calendarRouter.get("/connections/:connectionId/calendars", requireUser, async (r
       return;
     }
 
+    const connectionId = requireStringParam(req.params.connectionId);
+    if (!connectionId) {
+      res.status(400).json({ error: "connectionId is required" });
+      return;
+    }
+
     const calendars = await googleCalendarService.listCalendars({
       userId: req.currentUser.id,
-      calendarConnectionId: req.params.connectionId,
+      calendarConnectionId: connectionId,
     });
 
     res.status(200).json({ calendars });
@@ -147,9 +154,15 @@ calendarRouter.put("/connections/:connectionId/preferences", requireUser, async 
 
     const payload = connectionPreferencesSchema.parse(req.body ?? {});
 
+    const connectionId = requireStringParam(req.params.connectionId);
+    if (!connectionId) {
+      res.status(400).json({ error: "connectionId is required" });
+      return;
+    }
+
     const connection = await prisma.calendarConnection.findFirst({
       where: {
-        id: req.params.connectionId,
+        id: connectionId,
         userId: req.currentUser.id,
       },
     });
@@ -380,7 +393,11 @@ calendarRouter.post("/:connectionId/sync", requireUser, async (req, res, next) =
       return;
     }
 
-    const { connectionId } = req.params;
+    const connectionId = requireStringParam(req.params.connectionId);
+    if (!connectionId) {
+      res.status(400).json({ error: "connectionId is required" });
+      return;
+    }
     const { start, end, calendars } = syncSchema.parse(req.body ?? {});
 
     const result = await googleCalendarService.syncBusyBlocks({
@@ -468,7 +485,11 @@ calendarRouter.get("/meeting-types/:meetingTypeId", requireUser, async (req, res
       return;
     }
 
-    const { meetingTypeId } = req.params;
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    if (!meetingTypeId) {
+      res.status(400).json({ error: "meetingTypeId is required" });
+      return;
+    }
 
     const meetingType = await prisma.meetingType.findUnique({
       where: { id: meetingTypeId },
@@ -512,10 +533,15 @@ calendarRouter.put("/meeting-types/:meetingTypeId", requireUser, async (req, res
     }
 
     const payload = meetingTypeUpdateSchema.parse(req.body ?? {});
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    if (!meetingTypeId) {
+      res.status(400).json({ error: "meetingTypeId is required" });
+      return;
+    }
 
     const meetingType = await meetingTypesService.updateMeetingType({
       userId: req.currentUser.id,
-      meetingTypeId: req.params.meetingTypeId,
+      meetingTypeId,
       ...payload,
     });
 
@@ -767,7 +793,11 @@ calendarRouter.put("/events/:eventId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { eventId } = req.params;
+    const eventId = requireStringParam(req.params.eventId);
+    if (!eventId) {
+      res.status(400).json({ error: "eventId is required" });
+      return;
+    }
     const payload = z.object({
       summary: z.string().min(1).optional(),
       description: z.string().optional(),
@@ -871,7 +901,11 @@ calendarRouter.delete("/events/:eventId", requireUser, async (req, res, next) =>
       return;
     }
 
-    const { eventId } = req.params;
+    const eventId = requireStringParam(req.params.eventId);
+    if (!eventId) {
+      res.status(400).json({ error: "eventId is required" });
+      return;
+    }
     const calendarId = typeof req.query.calendarId === "string" ? req.query.calendarId : "primary";
 
     const connection = await prisma.calendarConnection.findFirst({
@@ -914,7 +948,11 @@ calendarRouter.get("/meeting-types/:meetingTypeId/slots", requireUser, async (re
       return;
     }
 
-    const { meetingTypeId } = req.params;
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    if (!meetingTypeId) {
+      res.status(400).json({ error: "meetingTypeId is required" });
+      return;
+    }
 
     const meetingType = await prisma.meetingType.findUnique({
       where: { id: meetingTypeId },
@@ -944,7 +982,11 @@ calendarRouter.post("/meeting-types/:meetingTypeId/slots", requireUser, async (r
       return;
     }
 
-    const { meetingTypeId } = req.params;
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    if (!meetingTypeId) {
+      res.status(400).json({ error: "meetingTypeId is required" });
+      return;
+    }
     const payload = customSlotSchema.parse(req.body ?? {});
 
     const meetingType = await prisma.meetingType.findUnique({
@@ -991,7 +1033,12 @@ calendarRouter.put("/meeting-types/:meetingTypeId/slots/:slotId", requireUser, a
       return;
     }
 
-    const { meetingTypeId, slotId } = req.params;
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    const slotId = requireStringParam(req.params.slotId);
+    if (!meetingTypeId || !slotId) {
+      res.status(400).json({ error: "meetingTypeId and slotId are required" });
+      return;
+    }
     const payload = customSlotUpdateSchema.parse(req.body ?? {});
 
     const meetingType = await prisma.meetingType.findUnique({
@@ -1067,7 +1114,12 @@ calendarRouter.delete("/meeting-types/:meetingTypeId/slots/:slotId", requireUser
       return;
     }
 
-    const { meetingTypeId, slotId } = req.params;
+    const meetingTypeId = requireStringParam(req.params.meetingTypeId);
+    const slotId = requireStringParam(req.params.slotId);
+    if (!meetingTypeId || !slotId) {
+      res.status(400).json({ error: "meetingTypeId and slotId are required" });
+      return;
+    }
 
     const meetingType = await prisma.meetingType.findUnique({
       where: { id: meetingTypeId },

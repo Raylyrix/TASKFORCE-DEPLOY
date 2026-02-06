@@ -4,8 +4,11 @@ import { prisma } from "../../lib/prisma";
 import { requireUser } from "../../middleware/requireUser";
 import { googleAuthService } from "../../services/googleAuth";
 import { google } from "googleapis";
+import { requireStringParam } from "../../utils/request";
 
 export const emailFeaturesRouter = Router();
+
+type GmailHeader = { name?: string | null; value?: string | null };
 
 // ========== DRAFTS ==========
 
@@ -69,7 +72,11 @@ emailFeaturesRouter.get("/drafts/:draftId", requireUser, async (req, res, next) 
       return;
     }
 
-    const { draftId } = req.params;
+    const draftId = requireStringParam(req.params.draftId);
+    if (!draftId) {
+      res.status(400).json({ error: "draftId is required" });
+      return;
+    }
     const draft = await prisma.emailDraft.findFirst({
       where: { id: draftId, userId: currentUser.id },
     });
@@ -93,7 +100,11 @@ emailFeaturesRouter.put("/drafts/:draftId", requireUser, async (req, res, next) 
       return;
     }
 
-    const { draftId } = req.params;
+    const draftId = requireStringParam(req.params.draftId);
+    if (!draftId) {
+      res.status(400).json({ error: "draftId is required" });
+      return;
+    }
     const payload = draftSchema.partial().parse(req.body);
 
     const draft = await prisma.emailDraft.updateMany({
@@ -124,7 +135,11 @@ emailFeaturesRouter.delete("/drafts/:draftId", requireUser, async (req, res, nex
       return;
     }
 
-    const { draftId } = req.params;
+    const draftId = requireStringParam(req.params.draftId);
+    if (!draftId) {
+      res.status(400).json({ error: "draftId is required" });
+      return;
+    }
     await prisma.emailDraft.deleteMany({
       where: { id: draftId, userId: currentUser.id },
     });
@@ -198,7 +213,11 @@ emailFeaturesRouter.delete("/scheduled/:scheduledId", requireUser, async (req, r
       return;
     }
 
-    const { scheduledId } = req.params;
+    const scheduledId = requireStringParam(req.params.scheduledId);
+    if (!scheduledId) {
+      res.status(400).json({ error: "scheduledId is required" });
+      return;
+    }
     await prisma.scheduledEmail.updateMany({
       where: { id: scheduledId, userId: currentUser.id, status: "PENDING" },
       data: { status: "CANCELLED" },
@@ -276,7 +295,11 @@ emailFeaturesRouter.get("/templates/:templateId", requireUser, async (req, res, 
       return;
     }
 
-    const { templateId } = req.params;
+    const templateId = requireStringParam(req.params.templateId);
+    if (!templateId) {
+      res.status(400).json({ error: "templateId is required" });
+      return;
+    }
     const template = await prisma.emailTemplate.findFirst({
       where: { id: templateId, userId: currentUser.id },
     });
@@ -300,7 +323,11 @@ emailFeaturesRouter.put("/templates/:templateId", requireUser, async (req, res, 
       return;
     }
 
-    const { templateId } = req.params;
+    const templateId = requireStringParam(req.params.templateId);
+    if (!templateId) {
+      res.status(400).json({ error: "templateId is required" });
+      return;
+    }
     const payload = templateSchema.partial().parse(req.body);
 
     await prisma.emailTemplate.updateMany({
@@ -334,7 +361,11 @@ emailFeaturesRouter.delete("/templates/:templateId", requireUser, async (req, re
       return;
     }
 
-    const { templateId } = req.params;
+    const templateId = requireStringParam(req.params.templateId);
+    if (!templateId) {
+      res.status(400).json({ error: "templateId is required" });
+      return;
+    }
     await prisma.emailTemplate.deleteMany({
       where: { id: templateId, userId: currentUser.id },
     });
@@ -443,7 +474,11 @@ emailFeaturesRouter.delete("/snooze/:messageId", requireUser, async (req, res, n
       return;
     }
 
-    const { messageId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    if (!messageId) {
+      res.status(400).json({ error: "messageId is required" });
+      return;
+    }
     const snooze = await prisma.emailSnooze.findFirst({
       where: { userId: currentUser.id, messageId },
     });
@@ -554,7 +589,11 @@ emailFeaturesRouter.get("/filters/:filterId", requireUser, async (req, res, next
       return;
     }
 
-    const { filterId } = req.params;
+    const filterId = requireStringParam(req.params.filterId);
+    if (!filterId) {
+      res.status(400).json({ error: "filterId is required" });
+      return;
+    }
     const filter = await prisma.emailFilter.findFirst({
       where: { id: filterId, userId: currentUser.id },
     });
@@ -578,7 +617,11 @@ emailFeaturesRouter.put("/filters/:filterId", requireUser, async (req, res, next
       return;
     }
 
-    const { filterId } = req.params;
+    const filterId = requireStringParam(req.params.filterId);
+    if (!filterId) {
+      res.status(400).json({ error: "filterId is required" });
+      return;
+    }
     const payload = filterSchema.partial().parse(req.body);
 
     const filter = await prisma.emailFilter.updateMany({
@@ -614,7 +657,11 @@ emailFeaturesRouter.delete("/filters/:filterId", requireUser, async (req, res, n
       return;
     }
 
-    const { filterId } = req.params;
+    const filterId = requireStringParam(req.params.filterId);
+    if (!filterId) {
+      res.status(400).json({ error: "filterId is required" });
+      return;
+    }
     const filter = await prisma.emailFilter.deleteMany({
       where: { id: filterId, userId: currentUser.id },
     });
@@ -639,7 +686,11 @@ emailFeaturesRouter.post("/filters/execute/:messageId", requireUser, async (req,
       return;
     }
 
-    const { messageId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    if (!messageId) {
+      res.status(400).json({ error: "messageId is required" });
+      return;
+    }
 
     // Get active filters
     const filters = await prisma.emailFilter.findMany({
@@ -658,7 +709,7 @@ emailFeaturesRouter.post("/filters/execute/:messageId", requireUser, async (req,
     });
 
     const headers = (messageData.payload?.headers ?? []).reduce(
-      (acc, header) => {
+      (acc: Record<string, string>, header: GmailHeader) => {
         if (header.name && header.value) {
           acc[header.name.toLowerCase()] = header.value;
         }
@@ -671,7 +722,7 @@ emailFeaturesRouter.post("/filters/execute/:messageId", requireUser, async (req,
     const to = headers.to || "";
     const subject = headers.subject || "";
     const labelIds = messageData.labelIds || [];
-    const hasAttachment = messageData.payload?.parts?.some((p) => p.filename) || false;
+    const hasAttachment = messageData.payload?.parts?.some((p: { filename?: string | null }) => p.filename) || false;
     const isUnread = labelIds.includes("UNREAD");
     const isStarred = labelIds.includes("STARRED");
 

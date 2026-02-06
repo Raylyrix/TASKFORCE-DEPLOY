@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireUser } from "../../middleware/requireUser";
 import { prisma } from "../../lib/prisma";
 import { workflowEngine } from "../../services/workflowEngine";
+import { requireStringParam } from "../../utils/request";
 
 export const workflowsRouter = Router();
 
@@ -92,9 +93,15 @@ workflowsRouter.get("/:workflowId", requireUser, async (req, res, next) => {
       return;
     }
 
+    const workflowId = requireStringParam(req.params.workflowId);
+    if (!workflowId) {
+      res.status(400).json({ error: "workflowId is required" });
+      return;
+    }
+
     const workflow = await prisma.workflow.findFirst({
       where: {
-        id: req.params.workflowId,
+        id: workflowId,
         userId: req.currentUser.id,
       },
     });
@@ -174,9 +181,15 @@ workflowsRouter.put("/:workflowId", requireUser, async (req, res, next) => {
 
     const payload = updateWorkflowSchema.parse(req.body);
 
+    const workflowId = requireStringParam(req.params.workflowId);
+    if (!workflowId) {
+      res.status(400).json({ error: "workflowId is required" });
+      return;
+    }
+
     const workflow = await prisma.workflow.findFirst({
       where: {
-        id: req.params.workflowId,
+        id: workflowId,
         userId: req.currentUser.id,
       },
     });
@@ -223,9 +236,15 @@ workflowsRouter.delete("/:workflowId", requireUser, async (req, res, next) => {
       return;
     }
 
+    const workflowId = requireStringParam(req.params.workflowId);
+    if (!workflowId) {
+      res.status(400).json({ error: "workflowId is required" });
+      return;
+    }
+
     const workflow = await prisma.workflow.findFirst({
       where: {
-        id: req.params.workflowId,
+        id: workflowId,
         userId: req.currentUser.id,
       },
     });
@@ -253,9 +272,15 @@ workflowsRouter.post("/:workflowId/execute", requireUser, async (req, res, next)
       return;
     }
 
+    const workflowId = requireStringParam(req.params.workflowId);
+    if (!workflowId) {
+      res.status(400).json({ error: "workflowId is required" });
+      return;
+    }
+
     const workflow = await prisma.workflow.findFirst({
       where: {
-        id: req.params.workflowId,
+        id: workflowId,
         userId: req.currentUser.id,
       },
     });
@@ -291,9 +316,15 @@ workflowsRouter.get("/:workflowId/executions", requireUser, async (req, res, nex
       return;
     }
 
+    const workflowId = requireStringParam(req.params.workflowId);
+    if (!workflowId) {
+      res.status(400).json({ error: "workflowId is required" });
+      return;
+    }
+
     const workflow = await prisma.workflow.findFirst({
       where: {
-        id: req.params.workflowId,
+        id: workflowId,
         userId: req.currentUser.id,
       },
     });

@@ -8,6 +8,7 @@ import { requireUser } from "../../middleware/requireUser";
 import { googleAuthService } from "../../services/googleAuth";
 import { gmailDeliveryService } from "../../services/gmailDelivery";
 import { logger } from "../../lib/logger";
+import { requireStringParam } from "../../utils/request";
 
 export const bookingsRouter = Router();
 
@@ -107,9 +108,15 @@ bookingsRouter.get("/:bookingId", requireUser, async (req, res, next) => {
       return;
     }
 
+    const bookingId = requireStringParam(req.params.bookingId);
+    if (!bookingId) {
+      res.status(400).json({ error: "bookingId is required" });
+      return;
+    }
+
     const booking = await prisma.meetingBooking.findFirst({
       where: {
-        id: req.params.bookingId,
+        id: bookingId,
         userId: req.currentUser.id,
       },
       include: {
@@ -165,9 +172,15 @@ bookingsRouter.post("/:bookingId/cancel", requireUser, async (req, res, next) =>
 
     const payload = cancelBookingSchema.parse(req.body ?? {});
 
+    const bookingId = requireStringParam(req.params.bookingId);
+    if (!bookingId) {
+      res.status(400).json({ error: "bookingId is required" });
+      return;
+    }
+
     const booking = await prisma.meetingBooking.findFirst({
       where: {
-        id: req.params.bookingId,
+        id: bookingId,
         userId: req.currentUser.id,
       },
       include: {

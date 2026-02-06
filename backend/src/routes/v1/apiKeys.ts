@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireUser } from "../../middleware/requireUser";
 import { apiKeyService } from "../../services/apiKeyService";
+import { requireStringParam } from "../../utils/request";
 
 export const apiKeysV1Router = Router();
 
@@ -44,7 +45,7 @@ apiKeysV1Router.get("/", requireUser, async (req, res, next) => {
 apiKeysV1Router.get("/:id", requireUser, async (req, res, next) => {
   try {
     const userId = req.currentUser!.id;
-    const apiKeyId = req.params.id;
+    const apiKeyId = requireStringParam(req.params.id);
 
     const apiKey = await apiKeyService.getApiKey(apiKeyId, userId);
 
@@ -104,7 +105,7 @@ apiKeysV1Router.post("/", requireUser, async (req, res, next) => {
 apiKeysV1Router.put("/:id", requireUser, async (req, res, next) => {
   try {
     const userId = req.currentUser!.id;
-    const apiKeyId = req.params.id;
+    const apiKeyId = requireStringParam(req.params.id);
     const body = updateApiKeySchema.parse(req.body);
 
     const updateData: any = {};
@@ -134,7 +135,7 @@ apiKeysV1Router.put("/:id", requireUser, async (req, res, next) => {
 apiKeysV1Router.delete("/:id", requireUser, async (req, res, next) => {
   try {
     const userId = req.currentUser!.id;
-    const apiKeyId = req.params.id;
+    const apiKeyId = requireStringParam(req.params.id);
 
     await apiKeyService.revokeApiKey(apiKeyId, userId);
 

@@ -162,7 +162,7 @@ campaignsRouter.post("/", requireUser, campaignCreationRateLimiter, async (req, 
         id: campaign.id,
         name: campaign.name,
         status: campaign.status,
-        recipients: campaign.recipients.length,
+        recipients: recipients.length,
       },
     });
   } catch (error) {

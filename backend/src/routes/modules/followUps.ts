@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireUser } from "../../middleware/requireUser";
 import { prisma } from "../../lib/prisma";
 import { campaignEngine } from "../../services/campaignEngine";
+import { requireStringParam } from "../../utils/request";
 
 export const followUpsRouter = Router();
 
@@ -206,7 +207,11 @@ followUpsRouter.get("/:campaignId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { campaignId } = req.params;
+    const campaignId = requireStringParam(req.params.campaignId);
+    if (!campaignId) {
+      res.status(400).json({ error: "campaignId is required" });
+      return;
+    }
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
@@ -296,7 +301,7 @@ followUpsRouter.post("/send", requireUser, async (req, res, next) => {
         
         // Extract Message-ID and References from headers
         const headers = (gmailMessage.data.payload?.headers ?? []).reduce(
-          (acc, header) => {
+          (acc: Record<string, string>, header: { name?: string | null; value?: string | null }) => {
             if (header.name && header.value) {
               acc[header.name.toLowerCase()] = header.value;
             }

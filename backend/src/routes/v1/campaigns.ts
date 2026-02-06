@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireApiKey, requireScope } from "../../middleware/apiKeyAuthV1";
 import { campaignEngine } from "../../services/campaignEngine";
 import { prisma } from "../../lib/prisma";
+import { getStringParam, requireStringParam } from "../../utils/request";
 
 export const campaignsV1Router = Router();
 
@@ -38,10 +39,10 @@ const createCampaignSchema = z.object({
 campaignsV1Router.get("/", requireScope("campaigns:read"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    const status = req.query.status as string | undefined;
-    const folderId = req.query.folderId as string | undefined;
+    const page = parseInt(getStringParam(req.query.page) || "1", 10) || 1;
+    const limit = Math.min(parseInt(getStringParam(req.query.limit) || "20", 10) || 20, 100);
+    const status = getStringParam(req.query.status);
+    const folderId = getStringParam(req.query.folderId);
 
     const where: any = { userId };
     if (status) where.status = status;
@@ -96,7 +97,14 @@ campaignsV1Router.get("/", requireScope("campaigns:read"), async (req, res, next
 campaignsV1Router.get("/:id", requireScope("campaigns:read"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, userId },
@@ -197,7 +205,7 @@ campaignsV1Router.post("/", requireScope("campaigns:write"), async (req, res, ne
         id: campaign.id,
         name: campaign.name,
         status: campaign.status,
-        recipientCount: campaign.recipients.length,
+        recipientCount: recipients.length,
         createdAt: campaign.createdAt.toISOString(),
       },
       meta: {
@@ -213,7 +221,14 @@ campaignsV1Router.post("/", requireScope("campaigns:write"), async (req, res, ne
 campaignsV1Router.post("/:id/schedule", requireScope("campaigns:write"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
     // Backward/forward compatible scheduling:
     // - Allow empty body => schedule at campaign.strategy.startAt (or now)
     // - Accept sendAt as alias (common client field)
@@ -294,7 +309,14 @@ campaignsV1Router.post("/:id/schedule", requireScope("campaigns:write"), async (
 campaignsV1Router.post("/:id/pause", requireScope("campaigns:write"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, userId },
@@ -334,7 +356,14 @@ campaignsV1Router.post("/:id/pause", requireScope("campaigns:write"), async (req
 campaignsV1Router.post("/:id/resume", requireScope("campaigns:write"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, userId },
@@ -374,7 +403,14 @@ campaignsV1Router.post("/:id/resume", requireScope("campaigns:write"), async (re
 campaignsV1Router.post("/:id/cancel", requireScope("campaigns:write"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, userId },
@@ -414,7 +450,14 @@ campaignsV1Router.post("/:id/cancel", requireScope("campaigns:write"), async (re
 campaignsV1Router.get("/:id/analytics", requireScope("analytics:read"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const campaignId = req.params.id;
+    const campaignId = requireStringParam(req.params.id);
+    if (!campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "campaignId is required" },
+        meta: { timestamp: new Date().toISOString() },
+      });
+    }
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, userId },

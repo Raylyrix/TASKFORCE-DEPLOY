@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireUser } from "../../middleware/requireUser";
+import { requireStringParam } from "../../utils/request";
 
 export const teamsRouter = Router();
 
@@ -135,7 +136,11 @@ teamsRouter.get("/:teamId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
 
     // Check if user is a member
     const membership = await prisma.teamMember.findUnique({
@@ -203,7 +208,11 @@ teamsRouter.put("/:teamId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
     const payload = teamUpdateSchema.parse(req.body);
 
     // Check if user is owner or admin
@@ -263,7 +272,11 @@ teamsRouter.delete("/:teamId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
 
     // Check if user is owner
     const team = await prisma.team.findUnique({
@@ -299,7 +312,11 @@ teamsRouter.post("/:teamId/members", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
     const payload = teamMemberSchema.parse(req.body);
 
     // Check if user is owner or admin
@@ -375,7 +392,12 @@ teamsRouter.delete("/:teamId/members/:userId", requireUser, async (req, res, nex
       return;
     }
 
-    const { teamId, userId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    const userId = requireStringParam(req.params.userId);
+    if (!teamId || !userId) {
+      res.status(400).json({ error: "teamId and userId are required" });
+      return;
+    }
 
     // Check if user is owner or admin, or if removing themselves
     const membership = await prisma.teamMember.findUnique({
@@ -433,7 +455,12 @@ teamsRouter.put("/:teamId/members/:userId", requireUser, async (req, res, next) 
       return;
     }
 
-    const { teamId, userId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    const userId = requireStringParam(req.params.userId);
+    if (!teamId || !userId) {
+      res.status(400).json({ error: "teamId and userId are required" });
+      return;
+    }
     const { role } = z.object({ role: z.enum(["OWNER", "ADMIN", "MEMBER"]) }).parse(req.body);
 
     // Check if user is owner
@@ -496,7 +523,11 @@ teamsRouter.post("/:teamId/shared-inboxes", requireUser, async (req, res, next) 
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
     const payload = z.object({
       name: z.string().min(1),
       description: z.string().optional(),
@@ -542,7 +573,11 @@ teamsRouter.get("/:teamId/shared-inboxes", requireUser, async (req, res, next) =
       return;
     }
 
-    const { teamId } = req.params;
+    const teamId = requireStringParam(req.params.teamId);
+    if (!teamId) {
+      res.status(400).json({ error: "teamId is required" });
+      return;
+    }
 
     // Check if user is a member
     const membership = await prisma.teamMember.findUnique({

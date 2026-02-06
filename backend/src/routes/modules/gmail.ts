@@ -5,8 +5,11 @@ import { z } from "zod";
 import { cache, cacheKeys, CACHE_TTL } from "../../lib/cache";
 import { requireUser } from "../../middleware/requireUser";
 import { googleAuthService } from "../../services/googleAuth";
+import { getStringParam, requireStringParam } from "../../utils/request";
 
 export const gmailRouter = Router();
+
+type GmailHeader = { name?: string | null; value?: string | null };
 
 gmailRouter.get("/labels", requireUser, async (req, res, next) => {
   try {
@@ -121,7 +124,7 @@ gmailRouter.get("/messages", requireUser, async (req, res, next) => {
           });
 
           const headers = (msgData.data.payload?.headers ?? []).reduce(
-            (acc, header) => {
+            (acc: Record<string, string>, header: GmailHeader) => {
               if (header.name && header.value) {
                 acc[header.name.toLowerCase()] = header.value;
               }
@@ -174,7 +177,11 @@ gmailRouter.get("/threads/:threadId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { threadId } = req.params;
+    const threadId = requireStringParam(req.params.threadId);
+    if (!threadId) {
+      res.status(400).json({ error: "threadId is required" });
+      return;
+    }
 
     const client = await googleAuthService.getAuthorizedClientForUser(currentUser.id);
     const gmail = google.gmail({ version: "v1", auth: client });
@@ -185,9 +192,25 @@ gmailRouter.get("/threads/:threadId", requireUser, async (req, res, next) => {
       format: "full",
     });
 
-    const messages = (data.messages ?? []).map((msg) => {
+    const messages: Array<{
+      id: string;
+      threadId: string;
+      snippet: string;
+      payload: {
+        headers: Record<string, string>;
+        body: { text: string; html: string };
+        attachments: Array<{
+          filename: string;
+          mimeType: string;
+          size: number;
+          attachmentId: string;
+        }>;
+      };
+      internalDate?: number;
+      labelIds: string[];
+    }> = (data.messages ?? []).map((msg) => {
       const headers = (msg.payload?.headers ?? []).reduce(
-        (acc, header) => {
+        (acc: Record<string, string>, header: GmailHeader) => {
           if (header.name && header.value) {
             acc[header.name.toLowerCase()] = header.value;
           }
@@ -275,7 +298,11 @@ gmailRouter.get("/messages/:messageId", requireUser, async (req, res, next) => {
       return;
     }
 
-    const { messageId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    if (!messageId) {
+      res.status(400).json({ error: "messageId is required" });
+      return;
+    }
 
     const client = await googleAuthService.getAuthorizedClientForUser(currentUser.id);
     const gmail = google.gmail({ version: "v1", auth: client });
@@ -287,7 +314,7 @@ gmailRouter.get("/messages/:messageId", requireUser, async (req, res, next) => {
     });
 
     const headers = (data.payload?.headers ?? []).reduce(
-      (acc, header) => {
+      (acc: Record<string, string>, header: GmailHeader) => {
         if (header.name && header.value) {
           acc[header.name.toLowerCase()] = header.value;
         }
@@ -370,7 +397,11 @@ gmailRouter.post("/messages/:messageId/actions", requireUser, async (req, res, n
       return;
     }
 
-    const { messageId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    if (!messageId) {
+      res.status(400).json({ error: "messageId is required" });
+      return;
+    }
     const payload = emailActionSchema.parse(req.body ?? {});
 
     const client = await googleAuthService.getAuthorizedClientForUser(currentUser.id);
@@ -538,7 +569,11 @@ gmailRouter.post("/messages/:messageId/reply", requireUser, async (req, res, nex
       return;
     }
 
-    const { messageId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    if (!messageId) {
+      res.status(400).json({ error: "messageId is required" });
+      return;
+    }
     const payload = replySchema.parse(req.body ?? {});
 
     const client = await googleAuthService.getAuthorizedClientForUser(currentUser.id);
@@ -553,7 +588,7 @@ gmailRouter.post("/messages/:messageId/reply", requireUser, async (req, res, nex
     });
 
     const headers = (originalMessage.data.payload?.headers ?? []).reduce(
-      (acc, header) => {
+      (acc: Record<string, string>, header: GmailHeader) => {
         if (header.name && header.value) {
           acc[header.name.toLowerCase()] = header.value;
         }
@@ -750,7 +785,12 @@ gmailRouter.get("/messages/:messageId/attachments/:attachmentId", requireUser, a
       return;
     }
 
-    const { messageId, attachmentId } = req.params;
+    const messageId = requireStringParam(req.params.messageId);
+    const attachmentId = requireStringParam(req.params.attachmentId);
+    if (!messageId || !attachmentId) {
+      res.status(400).json({ error: "messageId and attachmentId are required" });
+      return;
+    }
 
     const client = await googleAuthService.getAuthorizedClientForUser(currentUser.id);
     const gmail = google.gmail({ version: "v1", auth: client });
@@ -771,7 +811,8 @@ gmailRouter.get("/messages/:messageId/attachments/:attachmentId", requireUser, a
 
     // Set appropriate headers for download
     res.setHeader("Content-Type", (data as any).mimeType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename="${req.query.filename || "attachment"}"`);
+    const filename = getStringParam(req.query.filename) || "attachment";
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", attachmentData.length);
 
     res.send(attachmentData);

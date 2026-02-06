@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { requireApiKey, requireScope } from "../../middleware/apiKeyAuthV1";
 import { prisma } from "../../lib/prisma";
+import { getStringParam, requireStringParam } from "../../utils/request";
 
 export const contactsV1Router = Router();
 
@@ -12,9 +13,9 @@ contactsV1Router.use(requireApiKey);
 contactsV1Router.get("/", requireScope("contacts:read"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    const search = req.query.search as string | undefined;
+    const page = parseInt(getStringParam(req.query.page) || "1", 10) || 1;
+    const limit = Math.min(parseInt(getStringParam(req.query.limit) || "20", 10) || 20, 100);
+    const search = getStringParam(req.query.search);
 
     // Get unique contacts from campaign recipients
     const where: any = {
@@ -90,7 +91,8 @@ contactsV1Router.get("/", requireScope("contacts:read"), async (req, res, next) 
 contactsV1Router.get("/:email", requireScope("contacts:read"), async (req, res, next) => {
   try {
     const userId = req.apiKey!.userId;
-    const email = decodeURIComponent(req.params.email);
+    const emailParam = requireStringParam(req.params.email);
+    const email = decodeURIComponent(emailParam);
 
     // Get contact from campaign recipients
     const recipient = await prisma.campaignRecipient.findFirst({
