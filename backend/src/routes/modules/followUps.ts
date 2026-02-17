@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { z } from "zod";

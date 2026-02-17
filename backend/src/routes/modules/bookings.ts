@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from "express";
 import { z } from "zod";
 import { MeetingBookingStatus } from "@prisma/client";

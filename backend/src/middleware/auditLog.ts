@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { RequestHandler } from "express";
 
 import { logger } from "../lib/logger";

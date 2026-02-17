@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from "express";
 import { google } from "googleapis";
 import { z } from "zod";

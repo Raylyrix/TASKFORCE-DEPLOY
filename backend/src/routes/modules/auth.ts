@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 
 import { logger } from "../../lib/logger";
+import { AppConfig } from "../../config/env";
 import { oauthStateStore } from "../../services/oauthStateStore";
 import {
   exchangeCodeForTokens,
@@ -21,8 +22,15 @@ const startSchema = z.object({
 authRouter.post("/google/start", (req, res, next) => {
   try {
     const { redirectUri, extensionId } = startSchema.parse(req.body ?? {});
-    const fallbackRedirect = googleAuthService.getDefaultExtensionRedirect();
-    const effectiveRedirect = redirectUri ?? fallbackRedirect ?? undefined;
+    // Default redirect differs by source:
+    // - webapp: use GOOGLE_REDIRECT_URI (backend callback)
+    // - extension: use chromiumapp redirect
+    const fallbackWebappRedirect =
+      AppConfig.google.redirectUri ||
+      (AppConfig.publicUrl
+        ? `${String(AppConfig.publicUrl).replace(/\/+$/, "")}/api/auth/google/callback`
+        : null);
+    const fallbackExtensionRedirect = googleAuthService.getDefaultExtensionRedirect();
     
     // FOOLPROOF DETECTION: Extension sends extensionId - this is the absolute proof
     // If extensionId exists, it's 100% from extension (webapp cannot generate this)
@@ -102,6 +110,19 @@ authRouter.post("/google/start", (req, res, next) => {
       hasWebappForwardedHost: forwardedHost.includes("taskforce-webapp") || forwardedHost.includes("railway.app"),
       hasOriginHeader: (origin || "").length > 0
     }, "OAuth start - source detection");
+
+    // Browser webapp calls MUST use the backend callback by default.
+    // This avoids accidentally defaulting to extension redirects when the webapp doesn't send redirectUri.
+    const isBrowserWebappCall =
+      origin.includes("taskforce-webapp") ||
+      origin.includes("taskforce-frontend") ||
+      origin.includes("localhost:3000") ||
+      origin.includes("localhost:3001");
+
+    const effectiveRedirect =
+      redirectUri ??
+      (isBrowserWebappCall ? fallbackWebappRedirect : (source === "webapp" ? fallbackWebappRedirect : fallbackExtensionRedirect)) ??
+      undefined;
     
     const { state, expiresAt } = oauthStateStore.create({ 
       redirectUri: effectiveRedirect,

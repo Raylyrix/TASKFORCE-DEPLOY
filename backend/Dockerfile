@@ -57,6 +57,7 @@ RUN npm ci --only=production && npm install prisma@6.19.0 --save
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/scripts ./scripts
 
 # Copy startup script from builder stage (already copied there)
 COPY --from=builder /app/start.sh ./start.sh
