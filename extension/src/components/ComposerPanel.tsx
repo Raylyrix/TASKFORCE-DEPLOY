@@ -263,8 +263,6 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
   const composerDraft = useExtensionStore((state) => state.composerDraft);
   const updateComposerDraft = useExtensionStore((state) => state.updateComposerDraft);
   const openFollowUpOverlay = useExtensionStore((state) => state.openFollowUpOverlay);
-  const closeFollowUpOverlay = useExtensionStore((state) => state.closeFollowUpOverlay);
-  const updateFollowUpDraft = useExtensionStore((state) => state.updateFollowUpDraft);
   const backendUrl = useExtensionStore((state) => state.backendUrl);
   const resetComposerDraft = useExtensionStore((state) => state.resetComposerDraft);
   
@@ -1973,7 +1971,7 @@ export const ComposerPanel = ({ onCampaignCreated, instanceId }: ComposerPanelPr
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const openWindow = (window as any).__taskforceOpenWindow;
+                const openWindow = (window as Window & { __taskforceOpenWindow?: (configId: string) => void }).__taskforceOpenWindow;
                 if (openWindow) {
                   openWindow("taskforce-floating-best-practices");
                 }

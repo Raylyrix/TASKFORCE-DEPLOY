@@ -8,10 +8,6 @@ import {
 import { DEFAULT_BACKEND_URL, getBackendUrl, setBackendUrl } from "../shared/config";
 import type { UserProfile } from "../shared/types";
 
-type AuthStartPayload = {
-  interactive?: boolean;
-};
-
 const ensureBackendConfigured = async () => {
   const backendUrl = await getBackendUrl();
   if (!backendUrl) {
@@ -28,7 +24,7 @@ let pendingAuthState: { state: string; resolve: (value: AuthState) => void; reje
 // Track if callback is already being processed to prevent duplicate handling
 let isProcessingCallback = false;
 
-const handleAuthStart = async (payload?: AuthStartPayload) => {
+const handleAuthStart = async () => {
   const backendUrl = await getBackendUrl();
 
   // Use backend's callback URL with source parameter for better detection
@@ -275,7 +271,7 @@ chrome.runtime.onMessage.addListener(
     const processMessage = async () => {
       switch (message.type) {
         case MessageType.AuthStart:
-          return handleAuthStart(message.payload as AuthStartPayload);
+          return handleAuthStart();
         case MessageType.AuthStatus:
           return handleAuthStatus();
         case MessageType.AuthSignOut:

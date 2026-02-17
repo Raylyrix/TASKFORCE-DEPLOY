@@ -4,8 +4,6 @@
  * Selected emails can be used to create campaigns or follow-ups
  */
 
-import { apiClient } from "../shared/apiClient";
-
 type SelectedEmail = {
   email: string;
   subject: string;
@@ -365,8 +363,9 @@ function openComposerWithSelectedEmails() {
     
     // Trigger opening the composer window
     // Use the existing window opening mechanism
-    if (typeof (window as any).__taskforceOpenWindow === "function") {
-      (window as any).__taskforceOpenWindow("taskforce-floating-composer");
+    const taskforceWindow = window as Window & { __taskforceOpenWindow?: (configId: string) => void };
+    if (typeof taskforceWindow.__taskforceOpenWindow === "function") {
+      taskforceWindow.__taskforceOpenWindow("taskforce-floating-composer");
     } else {
       // Fallback: dispatch a custom event
       window.dispatchEvent(new CustomEvent("taskforce-open-composer"));

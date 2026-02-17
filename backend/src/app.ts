@@ -15,34 +15,71 @@ export const createApp = () => {
   // Trust proxy for accurate IP addresses (important for rate limiting)
   app.set("trust proxy", 1);
 
+  const extraAllowedOrigins =
+    (process.env.CORS_ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+
+  const railwayFrontendUrl =
+    process.env.RAILWAY_SERVICE_TASKFORCE_FRONTEND_URL ||
+    process.env.RAILWAY_SERVICE_TASKFORCE_WEBAPP_URL ||
+    "";
+  const railwayFrontendOrigin = railwayFrontendUrl
+    ? (railwayFrontendUrl.startsWith("http") ? railwayFrontendUrl : `https://${railwayFrontendUrl}`)
+    : "";
+
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, Postman, or Chrome extensions using fetch)
-        if (!origin) {
+        try {
+          // Allow requests with no origin (like mobile apps, Postman, or Chrome extensions using fetch)
+          if (!origin) {
+            return callback(null, true);
+          }
+
+          const normalizedOrigin = String(origin).trim().replace(/\/+$/, "").toLowerCase();
+
+          const allowedOrigins = [
+            "https://taskforce-webapp-production.up.railway.app",
+            "https://taskforce-frontend-production.up.railway.app",
+            "https://mail.google.com", // Allow Chrome extension content scripts
+            "http://localhost:3000",
+            "http://localhost:3001",
+            ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
+            ...(railwayFrontendOrigin ? [railwayFrontendOrigin] : []),
+            ...extraAllowedOrigins,
+          ];
+          const allowedNormalized = allowedOrigins
+            .map((o) => String(o).trim().replace(/\/+$/, "").toLowerCase())
+            .filter(Boolean);
+
+          // Check if origin is in allowed list
+          if (allowedNormalized.includes(normalizedOrigin)) {
+            return callback(null, true);
+          }
+
+          // For Chrome extensions, also allow chrome-extension:// origins
+          if (normalizedOrigin.startsWith("chrome-extension://")) {
+            return callback(null, true);
+          }
+
+          // Allow TaskForce Railway-hosted frontends (handles naming drift: taskforce-webapp vs taskforce-frontend)
+          if (/^https:\/\/taskforce-[a-z0-9-]+\.up\.railway\.app$/i.test(normalizedOrigin)) {
+            return callback(null, true);
+          }
+
+          // Reject other origins (log for debugging)
+          logger.warn(
+            { origin: normalizedOrigin, allowed: allowedNormalized.slice(0, 12) },
+            "CORS: blocked request origin",
+          );
+          return callback(new Error("Not allowed by CORS"));
+        } catch (error) {
+          // Never crash preflight / requests due to a CORS config bug.
+          logger.error({ error, origin }, "CORS: origin evaluation crashed; allowing request");
           return callback(null, true);
         }
-
-        const allowedOrigins = [
-          "https://taskforce-webapp-production.up.railway.app",
-          "https://mail.google.com", // Allow Chrome extension content scripts
-          "http://localhost:3000",
-          "http://localhost:3001",
-          ...(AppConfig.publicUrl ? [AppConfig.publicUrl] : []),
-        ];
-
-        // Check if origin is in allowed list
-        if (allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-
-        // For Chrome extensions, also allow chrome-extension:// origins
-        if (origin.startsWith("chrome-extension://")) {
-          return callback(null, true);
-        }
-
-        // Reject other origins
-        callback(new Error("Not allowed by CORS"));
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -118,8 +155,7 @@ export const createApp = () => {
     res.status(404).json({ error: "Not found" });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Better error logging with proper serialization
     let errorMessage = "Unknown error";
     let errorStack: string | undefined;

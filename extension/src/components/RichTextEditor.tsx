@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 
 import { MergeFieldAutocomplete } from "./MergeFieldAutocomplete";
 
@@ -39,7 +39,6 @@ export type RichTextEditorHandle = {
   focus: () => void;
 };
 
-const MERGE_FIELD_REGEX = /{{\s*([\w.-]+)\s*}}/g;
 const MERGE_FIELD_SPAN_REGEX = /<span[^>]*data-merge-field="([^"]+)"[^>]*>\s*{{[^}]+}}\s*<\/span>/g;
 
 const HIGHLIGHT_STYLE =
@@ -48,16 +47,10 @@ const HIGHLIGHT_STYLE =
 const stripMergeFieldSpans = (html: string) =>
   html.replace(MERGE_FIELD_SPAN_REGEX, (_, token: string) => `{{${token}}}`);
 
-const decorateMergeFields = (html: string) =>
-  (html || "").replace(MERGE_FIELD_REGEX, (_, token: string) => {
-    const cleanToken = token.trim();
-    return `<span data-merge-field="${cleanToken}" style="${HIGHLIGHT_STYLE}">{{${cleanToken}}}</span>`;
-  });
-
 const applyStyleWithCss = () => {
   try {
     // execCommand signature varies by browser - third param can be boolean or string
-    (document.execCommand as (commandId: string, showUI: boolean, value?: any) => boolean)(
+    (document.execCommand as (commandId: string, showUI: boolean, value?: string | boolean) => boolean)(
       "styleWithCSS",
       false,
       true,

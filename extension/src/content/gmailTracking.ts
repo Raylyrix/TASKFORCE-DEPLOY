@@ -4,7 +4,6 @@
  */
 
 import { apiClient } from "../shared/apiClient";
-import { getBackendUrl } from "../shared/config";
 
 type TrackingStatus = {
   opened: boolean;

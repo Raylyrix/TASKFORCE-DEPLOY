@@ -1,7 +1,6 @@
 import { createRoot, type Root } from "react-dom/client";
 
 import { ComposerApp, FollowUpApp, BestPracticesApp } from "./App";
-import { useExtensionStore } from "../shared/store";
 
 const FLOATING_COMPOSER_ID = "taskforce-floating-composer";
 const FLOATING_FOLLOWUPS_ID = "taskforce-floating-followups";
@@ -654,7 +653,7 @@ const toggleWindowVisibility = (configId: string) => {
 };
 
 // Expose function to open windows from React components
-(window as any).__taskforceOpenWindow = (configId: string) => {
+(window as Window & { __taskforceOpenWindow?: (configId: string) => void }).__taskforceOpenWindow = (configId: string) => {
   toggleWindowVisibility(configId);
 };
 
@@ -733,11 +732,11 @@ const spawnWindow = (config: WindowConfig, base?: StoredWindowState) => {
     }
   }
   
-  createWindowInstance(config, startState, isFresh);
+  createWindowInstance(config, startState);
   setWindowVisibility(instanceId, true);
 };
 
-const createWindowInstance = (config: WindowConfig, state: StoredWindowState, isFresh: boolean = false) => {
+const createWindowInstance = (config: WindowConfig, state: StoredWindowState) => {
   const existing = document.getElementById(state.instanceId) as HTMLDivElement | null;
   if (existing) {
     existing.remove();

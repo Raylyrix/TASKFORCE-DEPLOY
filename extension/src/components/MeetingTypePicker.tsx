@@ -19,8 +19,6 @@ const CADENCE_OPTIONS: Array<{ value: string; label: string; minutes: number | n
   { value: "2880", label: "Every 2 days", minutes: 2880 },
 ];
 
-const formatLinkText = (name: string) => `Book time (${name})`;
-
 type MeetingTypePickerProps = {
   backendUrl: string;
   onInsertIntoBody: (link: string, meetingName: string, linkLabel: string) => void;
@@ -1596,7 +1594,7 @@ export const MeetingTypePicker = ({ backendUrl, onInsertIntoBody, onInsertIntoSu
                             } else {
                               throw new Error("Clipboard API unavailable");
                             }
-                          } catch (error) {
+                        } catch {
                             toast("Failed to copy link. Please select and copy manually.");
                           }
                         }}
